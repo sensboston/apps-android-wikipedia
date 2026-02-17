@@ -113,6 +113,7 @@ android {
         dev {
             versionName computeVersionName(defaultConfig.versionCode, 'dev')
             applicationIdSuffix '.dev'
+            signingConfig = signingConfigs.debug
             buildConfigField "String", "META_WIKI_BASE_URI", '"https://meta.wikimedia.beta.wmflabs.org"'
             buildConfigField "String", "EVENTGATE_ANALYTICS_EXTERNAL_BASE_URI", '"https://intake-analytics.wikimedia.beta.wmflabs.org"'
             buildConfigField "String", "EVENTGATE_LOGGING_EXTERNAL_BASE_URI", '"https://intake-logging.wikimedia.beta.wmflabs.org"'
