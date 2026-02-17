@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Wikipedia Dev</string>
+    <string name="app_name">Wikipedia</string>
     <string name="channel">Developer Channel</string>
 
     <!-- TODO: remove and use the same account as alpha when tokens are stored. -->
