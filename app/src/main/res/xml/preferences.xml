@@ -35,6 +35,10 @@
             android:title="@string/preference_title_app_theme"
             android:summary="@string/preference_summary_color_theme" />
         <org.wikipedia.settings.PreferenceMultiLine
+            android:key="@string/preference_key_translate_language"
+            android:title="@string/preference_title_translate_language"
+            android:summary="@string/preference_summary_translate_language_none" />
+        <org.wikipedia.settings.PreferenceMultiLine
             android:key="@string/preference_key_selected_app_icon"
             android:defaultValue="0"
             android:title="@string/settings_app_icon_title"

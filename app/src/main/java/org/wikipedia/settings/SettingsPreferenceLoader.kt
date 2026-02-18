@@ -97,6 +97,14 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
             }
         }
 
+        findPreference(R.string.preference_key_translate_language).let {
+            updateTranslateLanguageSummary()
+            it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                showTranslateLanguagePicker()
+                true
+            }
+        }
+
         findPreference(R.string.preference_key_about_wikipedia_app).onPreferenceClickListener = Preference.OnPreferenceClickListener {
             activity.startActivity(Intent(activity, AboutActivity::class.java))
             true
@@ -155,6 +163,34 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
 
     private fun deviceInformation(): String {
         return "\n\nVersion: ${BuildConfig.VERSION_NAME} \nDevice: ${Build.BRAND} ${Build.MODEL} (SDK: ${Build.VERSION.SDK_INT})\n"
+    }
+
+    private fun showTranslateLanguagePicker() {
+        val app = WikipediaApp.instance
+        val codes = app.languageState.appMruLanguageCodes
+        val names = codes.map { code ->
+            val localized = app.languageState.getAppLanguageLocalizedName(code) ?: code
+            "$localized ($code)"
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.preference_title_translate_language)
+            .setItems(names) { _: DialogInterface, which: Int ->
+                Prefs.translateLanguageCode = codes[which]
+                updateTranslateLanguageSummary()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateTranslateLanguageSummary() {
+        val code = Prefs.translateLanguageCode
+        val pref = findPreference(R.string.preference_key_translate_language)
+        if (code.isNotEmpty()) {
+            val name = WikipediaApp.instance.languageState.getAppLanguageLocalizedName(code) ?: code
+            pref.summary = activity.getString(R.string.preference_summary_translate_language, name)
+        } else {
+            pref.setSummary(R.string.preference_summary_translate_language_none)
+        }
     }
 
     fun updateLanguagePrefSummary() {

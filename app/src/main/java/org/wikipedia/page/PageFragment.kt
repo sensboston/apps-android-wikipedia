@@ -908,6 +908,16 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 UriUtil.visitInExternalBrowser(requireContext(), Uri.parse(it.uri))
             }
         }
+        bridge.addListener("view_translated_in_browser") { _, _ ->
+            model.title?.let { title ->
+                val targetLang = Prefs.translateLanguageCode
+                if (targetLang.isNotEmpty()) {
+                    val articleUrl = title.uri
+                    val translateUrl = "https://translate.google.com/translate?sl=${title.wikiSite.languageCode}&tl=$targetLang&u=${Uri.encode(articleUrl)}"
+                    UriUtil.visitInExternalBrowser(requireContext(), Uri.parse(translateUrl))
+                }
+            }
+        }
     }
 
     fun reloadFromBackstack(forceReload: Boolean = true) {
@@ -966,6 +976,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         bridge.execute(JavaScriptActionHandler.setTopMargin(leadImagesHandler.topMargin))
         bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
         bridge.execute(JavaScriptActionHandler.setFooter(model))
+        addTranslateLinkIfNeeded()
     }
 
     fun openInNewBackgroundTab(title: PageTitle, entry: HistoryEntry) {
@@ -1056,6 +1067,15 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
 
     fun updateMargins() {
         bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
+    }
+
+    private fun addTranslateLinkIfNeeded() {
+        val title = model.title ?: return
+        val targetLang = Prefs.translateLanguageCode
+        if (targetLang.isEmpty() || targetLang == title.wikiSite.languageCode) return
+        val targetLangName = app.languageState.getAppLanguageLocalizedName(targetLang) ?: targetLang
+        val linkText = getString(R.string.page_view_translated_in_browser, targetLangName)
+        bridge.execute(JavaScriptActionHandler.addTranslateLink(linkText))
     }
 
     fun updateQuickActionsAndMenuOptions() {

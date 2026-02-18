@@ -140,6 +140,10 @@ object Prefs {
         get() = PrefsIoUtil.getBoolean(R.string.preference_key_text_hyphenation, true)
         set(value) = PrefsIoUtil.setBoolean(R.string.preference_key_text_hyphenation, value)
 
+    var translateLanguageCode
+        get() = PrefsIoUtil.getString(R.string.preference_key_translate_language, "").orEmpty()
+        set(value) = PrefsIoUtil.setString(R.string.preference_key_translate_language, value)
+
     var editingTextSizeMultiplier
         get() = PrefsIoUtil.getInt(R.string.preference_key_editing_text_size_multiplier, 0)
         set(multiplier) = PrefsIoUtil.setInt(R.string.preference_key_editing_text_size_multiplier, multiplier)

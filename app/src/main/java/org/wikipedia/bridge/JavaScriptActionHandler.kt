@@ -207,6 +207,27 @@ object JavaScriptActionHandler {
                 "})"
     }
 
+    fun addTranslateLink(linkText: String): String {
+        return "(function() {" +
+                "var container = document.getElementById('pcs-footer-container-legal');" +
+                "if (!container) return;" +
+                "var existing = document.getElementById('pcs-translate-link');" +
+                "if (existing) return;" +
+                "var link = document.createElement('a');" +
+                "link.id = 'pcs-translate-link';" +
+                "link.className = 'pcs-footer-legal-link';" +
+                "link.href = '#';" +
+                "link.textContent = '${linkText.replace("'", "\\'")}';" +
+                "link.style.display = 'block';" +
+                "link.style.marginTop = '16px';" +
+                "link.addEventListener('click', function(e) {" +
+                "  e.preventDefault();" +
+                "  pcsClient.onReceiveMessage(JSON.stringify({action:'view_translated_in_browser'}));" +
+                "});" +
+                "container.appendChild(link);" +
+                "})();"
+    }
+
     fun mobileWebChromeShim(marginTop: Int, marginBottom: Int): String {
         return "(function() {" +
                 "let style = document.createElement('style');" +
