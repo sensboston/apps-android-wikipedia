@@ -200,8 +200,8 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
         return "\n\nVersion: ${BuildConfig.VERSION_NAME} \nDevice: ${Build.BRAND} ${Build.MODEL} (SDK: ${Build.VERSION.SDK_INT})\n"
     }
 
-    private val autoTranslateProviders = listOf("Gemini Flash 2.0", "Claude Haiku", "GPT-4o mini", "DeepSeek V3", "GPT4Free (local)", "Groq Llama 3.3 70B")
-    private val autoTranslateProviderIds = listOf("gemini", "claude", "openai", "deepseek", "gpt4free", "groq")
+    private val autoTranslateProviders = listOf("GPT-4o mini", "Groq Llama 3.3 70B", "Gemini Flash 2.0")
+    private val autoTranslateProviderIds = listOf("openai", "groq", "gemini")
 
     private fun showAutoTranslateProviderPicker() {
         val currentIndex = autoTranslateProviderIds.indexOf(Prefs.autoTranslateProvider).coerceAtLeast(0)

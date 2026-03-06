@@ -9,12 +9,9 @@ object TranslationManager {
     fun getProvider(): TranslationProvider {
         val apiKey = Prefs.autoTranslateApiKey
         return when (TranslationProviderType.fromId(Prefs.autoTranslateProvider)) {
-            TranslationProviderType.GEMINI -> GeminiTranslationProvider(apiKey)
-            TranslationProviderType.CLAUDE -> ClaudeTranslationProvider(apiKey)
             TranslationProviderType.OPENAI -> OpenAITranslationProvider(apiKey)
-            TranslationProviderType.DEEPSEEK -> DeepSeekTranslationProvider(apiKey)
-            TranslationProviderType.GPT4FREE -> Gpt4FreeTranslationProvider()
             TranslationProviderType.GROQ -> GroqTranslationProvider(apiKey)
+            TranslationProviderType.GEMINI -> GeminiTranslationProvider(apiKey)
         }
     }
 
