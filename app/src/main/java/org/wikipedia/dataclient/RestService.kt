@@ -35,6 +35,12 @@ import retrofit2.http.Query
 
 interface RestService {
 
+    @Headers("Accept: $ACCEPT_HEADER_MOBILE_HTML")
+    @GET(PAGE_HTML_ENDPOINT + "{title}")
+    suspend fun getPageMobileHtml(
+        @Path("title") title: String
+    ): okhttp3.ResponseBody
+
     @Headers("x-analytics: preview=1", "Accept: $ACCEPT_HEADER_SUMMARY")
     @GET("page/summary/{title}")
     suspend fun getPageSummary(

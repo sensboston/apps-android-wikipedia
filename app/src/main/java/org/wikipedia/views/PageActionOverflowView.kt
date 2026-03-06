@@ -20,6 +20,7 @@ import org.wikipedia.databinding.ViewPageActionOverflowBinding
 import org.wikipedia.page.PageViewModel
 import org.wikipedia.page.action.PageActionItem
 import org.wikipedia.page.customize.CustomizeToolbarActivity
+import org.wikipedia.settings.SettingsActivity
 import org.wikipedia.page.tabs.Tab
 import org.wikipedia.settings.Prefs
 import org.wikipedia.util.ResourceUtil
@@ -51,6 +52,10 @@ class PageActionOverflowView(context: Context) : FrameLayout(context) {
         binding.customizeToolbar.setOnClickListener {
             dismissPopupWindowHost()
             context.startActivity(CustomizeToolbarActivity.newIntent(context))
+        }
+        binding.overflowSettings.setOnClickListener {
+            dismissPopupWindowHost()
+            context.startActivity(SettingsActivity.newIntent(context))
         }
     }
 

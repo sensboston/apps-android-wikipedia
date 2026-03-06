@@ -54,6 +54,22 @@
                 app:drawableStartCompat="@drawable/ic_settings_black_24dp"
                 app:drawableTint="?attr/primary_color" />
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?attr/border_color" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/overflow_settings"
+                style="@style/OverflowMenuItem"
+                android:layout_width="wrap_content"
+                android:drawablePadding="16dp"
+                android:text="@string/settings_item_preferences"
+                android:layoutDirection="locale"
+                android:textDirection="locale"
+                app:drawableStartCompat="@drawable/ic_settings_black_24dp"
+                app:drawableTint="?attr/primary_color" />
+
         </LinearLayout>
     </ScrollView>
 </org.wikipedia.views.WikiCardView>

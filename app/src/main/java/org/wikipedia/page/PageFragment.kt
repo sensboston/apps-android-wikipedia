@@ -36,9 +36,17 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textview.MaterialTextView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -66,6 +74,9 @@ import org.wikipedia.databinding.FragmentPageBinding
 import org.wikipedia.databinding.GroupFindReferencesInPageBinding
 import org.wikipedia.dataclient.RestService
 import org.wikipedia.dataclient.ServiceFactory
+import org.json.JSONObject
+import org.wikipedia.translation.TranslationManager
+import org.wikipedia.translation.TranslationTextExtractor
 import org.wikipedia.dataclient.WikiSite
 import org.wikipedia.dataclient.donate.CampaignCollection
 import org.wikipedia.dataclient.mwapi.MwQueryPage
@@ -601,6 +612,69 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         }
     }
 
+    fun startAutoTranslation(sourceTitle: PageTitle) {
+        val targetLang = Prefs.translateLanguageCode
+        if (targetLang.isEmpty()) return
+        val snackbar = FeedbackUtil.makeSnackbar(requireActivity(), getString(R.string.auto_translate_in_progress), Snackbar.LENGTH_INDEFINITE)
+        snackbar.show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val html = withContext(Dispatchers.IO) {
+                    ServiceFactory.getRest(sourceTitle.wikiSite)
+                        .getPageMobileHtml(UriUtil.encodeURL(sourceTitle.prefixedText))
+                        .string()
+                }
+                val chunks = TranslationTextExtractor.extractChunks(html)
+                val provider = TranslationManager.getProvider()
+                val semaphore = Semaphore(Prefs.autoTranslateConcurrency)
+                snackbar.setText(getString(R.string.auto_translate_in_progress_n, 0, chunks.size))
+                var completed = 0
+                var firstError: Exception? = null
+                supervisorScope {
+                    chunks.map { chunk ->
+                        async(Dispatchers.IO) {
+                            try {
+                                semaphore.withPermit {
+                                    val prompt = TranslationTextExtractor.buildChunkPrompt(targetLang, chunk)
+                                    val response = provider.translate(prompt, sourceTitle.wikiSite.languageCode, targetLang, "")
+                                    TranslationTextExtractor.parseResponse(response)
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                if (firstError == null) firstError = e
+                                emptyMap()
+                            }
+                        }
+                    }.forEach { deferred ->
+                        val translations = deferred.await()
+                        completed++
+                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, completed, chunks.size))
+                        if (translations.isNotEmpty()) injectTranslations(translations)
+                    }
+                }
+                firstError?.let { throw it }
+            } catch (e: Exception) {
+                val msg = e.message ?: e.toString()
+                android.util.Log.e("AutoTranslate", "Translation error: $msg", e)
+                FeedbackUtil.makeSnackbar(requireActivity(), msg, Snackbar.LENGTH_INDEFINITE)
+                    .setAction(android.R.string.ok) { }
+                    .show()
+            } finally {
+                snackbar.dismiss()
+            }
+        }
+    }
+
+    private fun injectTranslations(translations: Map<Int, String>) {
+        val items = translations.entries.joinToString(",") { (idx, text) ->
+            "{\"i\":$idx,\"t\":${JSONObject.quote(text)}}"
+        }
+        val js = "(function(items){var all=document.querySelectorAll('p,h2,h3,h4,li');" +
+                "items.forEach(function(item){if(all[item.i])all[item.i].innerHTML=item.t;});})([${items}]);"
+        webView.evaluateJavascript(js, null)
+    }
+
     private fun trimTabCount() {
         while (app.tabList.size > Constants.MAX_TABS) {
             app.tabList.removeAt(0)
@@ -899,23 +973,12 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 }
             }
         }
-        bridge.addListener("read_more_titles_retrieved") { _, _ -> }
         bridge.addListener("view_license") { _, _ ->
             UriUtil.visitInExternalBrowser(requireContext(), Uri.parse(getString(R.string.cc_by_sa_4_url)))
         }
         bridge.addListener("view_in_browser") { _, _ ->
             model.title?.let {
                 UriUtil.visitInExternalBrowser(requireContext(), Uri.parse(it.uri))
-            }
-        }
-        bridge.addListener("view_translated_in_browser") { _, _ ->
-            model.title?.let { title ->
-                val targetLang = Prefs.translateLanguageCode
-                if (targetLang.isNotEmpty()) {
-                    val articleUrl = title.uri
-                    val translateUrl = "https://translate.google.com/translate?sl=${title.wikiSite.languageCode}&tl=$targetLang&u=${Uri.encode(articleUrl)}"
-                    UriUtil.visitInExternalBrowser(requireContext(), Uri.parse(translateUrl))
-                }
             }
         }
     }
@@ -976,7 +1039,6 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         bridge.execute(JavaScriptActionHandler.setTopMargin(leadImagesHandler.topMargin))
         bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
         bridge.execute(JavaScriptActionHandler.setFooter(model))
-        addTranslateLinkIfNeeded()
     }
 
     fun openInNewBackgroundTab(title: PageTitle, entry: HistoryEntry) {
@@ -1067,15 +1129,6 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
 
     fun updateMargins() {
         bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
-    }
-
-    private fun addTranslateLinkIfNeeded() {
-        val title = model.title ?: return
-        val targetLang = Prefs.translateLanguageCode
-        if (targetLang.isEmpty() || targetLang == title.wikiSite.languageCode) return
-        val targetLangName = app.languageState.getAppLanguageLocalizedName(targetLang) ?: targetLang
-        val linkText = getString(R.string.page_view_translated_in_browser, targetLangName)
-        bridge.execute(JavaScriptActionHandler.addTranslateLink(linkText))
     }
 
     fun updateQuickActionsAndMenuOptions() {

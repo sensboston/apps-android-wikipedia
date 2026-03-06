@@ -144,6 +144,22 @@ object Prefs {
         get() = PrefsIoUtil.getString(R.string.preference_key_translate_language, "").orEmpty()
         set(value) = PrefsIoUtil.setString(R.string.preference_key_translate_language, value)
 
+    var autoTranslateProvider
+        get() = PrefsIoUtil.getString(R.string.preference_key_auto_translate_provider, "").orEmpty()
+        set(value) = PrefsIoUtil.setString(R.string.preference_key_auto_translate_provider, value)
+
+    var autoTranslateApiKey
+        get() = PrefsIoUtil.getString(R.string.preference_key_auto_translate_api_key, "").orEmpty()
+        set(value) = PrefsIoUtil.setString(R.string.preference_key_auto_translate_api_key, value)
+
+    var autoTranslatePrompt
+        get() = PrefsIoUtil.getString(R.string.preference_key_auto_translate_prompt, "").orEmpty()
+        set(value) = PrefsIoUtil.setString(R.string.preference_key_auto_translate_prompt, value)
+
+    var autoTranslateConcurrency
+        get() = PrefsIoUtil.getInt(R.string.preference_key_auto_translate_concurrency, 3)
+        set(value) = PrefsIoUtil.setInt(R.string.preference_key_auto_translate_concurrency, value)
+
     var editingTextSizeMultiplier
         get() = PrefsIoUtil.getInt(R.string.preference_key_editing_text_size_multiplier, 0)
         set(multiplier) = PrefsIoUtil.setInt(R.string.preference_key_editing_text_size_multiplier, multiplier)

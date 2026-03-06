@@ -211,4 +211,9 @@
     <string name="preference_key_yir_reading_list_visit_count">yirReadingListVisitCount</string>
     <string name="preference_key_yir_reading_list_survey_shown">yirReadingListSurveyShown</string>
     <string name="preference_key_translate_language">translateLanguage</string>
+    <string name="preference_category_auto_translate">autoTranslate</string>
+    <string name="preference_key_auto_translate_provider">autoTranslateProvider</string>
+    <string name="preference_key_auto_translate_api_key">autoTranslateApiKey</string>
+    <string name="preference_key_auto_translate_prompt">autoTranslatePrompt</string>
+    <string name="preference_key_auto_translate_concurrency">autoTranslateConcurrency</string>
 </resources>

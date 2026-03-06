@@ -19,6 +19,7 @@ import org.wikipedia.dataclient.WikiSite
 import org.wikipedia.dataclient.mwapi.SiteMatrix
 import org.wikipedia.page.PageTitle
 import org.wikipedia.staticdata.MainPageNameData
+import org.wikipedia.settings.Prefs
 import org.wikipedia.util.StringUtil
 import org.wikipedia.util.UiState
 
@@ -114,6 +115,20 @@ class LangLinksViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
             .ifEmpty { WikipediaApp.instance.languageState.getAppLanguageCanonicalName(code) }
     }
 
+    private fun buildAutoTranslateItem(): LangLinksItem? {
+        val targetLangCode = Prefs.translateLanguageCode
+        if (targetLangCode.isEmpty() || Prefs.autoTranslateApiKey.isEmpty()) return null
+        if (targetLangCode == pageTitle.wikiSite.languageCode) return null
+        val targetLangName = (app.languageState.getAppLanguageLocalizedName(targetLangCode) ?: targetLangCode).replaceFirstChar { it.uppercaseChar() }
+        return LangLinksItem(
+            pageTitle = pageTitle,
+            languageCode = targetLangCode,
+            localizedName = app.getString(R.string.auto_translate_lang_item, targetLangName),
+            canonicalName = app.getString(R.string.auto_translate_lang_item_subtitle),
+            isAutoTranslate = true
+        )
+    }
+
     private fun updateLanguageItems(searchTerm: String = "") {
         val appLangEntries = appLanguageEntries
         val originalEntries = originalLanguageEntries
@@ -134,6 +149,19 @@ class LangLinksViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
             items.addAll(filteredItems.map { createLangLinksItem(it) })
         } else {
             // not searching
+            buildAutoTranslateItem()?.let {
+                items.add(it)
+                // Keep original source language as second entry so user can navigate back
+                val srcCode = pageTitle.wikiSite.languageCode
+                val srcName = StringUtil.capitalize(app.languageState.getAppLanguageLocalizedName(srcCode)) ?: srcCode
+                items.add(LangLinksItem(
+                    pageTitle = pageTitle,
+                    languageCode = srcCode,
+                    localizedName = srcName,
+                    canonicalName = app.getString(R.string.auto_translate_source_lang_subtitle)
+                ))
+            }
+
             // Add app languages section if available, usually after user select article in different
             // language
             if (appLangEntries.isNotEmpty()) {
@@ -241,5 +269,6 @@ data class LangLinksItem(
     val localizedName: String = "",
     var canonicalName: String? = null,
     val subtitle: String = "",
-    val headerText: String = ""
+    val headerText: String = "",
+    val isAutoTranslate: Boolean = false
 )

@@ -130,9 +130,22 @@ class PageActivity : BaseActivity(), PageFragment.Callback, LinkPreviewDialog.Lo
     }
 
     private val requestHandleIntentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == LangLinksActivity.ACTIVITY_RESULT_LANGLINK_SELECT || it.resultCode == GalleryActivity.ACTIVITY_RESULT_PAGE_SELECTED) {
-            it.data?.let {
-                binding.pageToolbarContainer.post { handleIntent(it) }
+        when (it.resultCode) {
+            LangLinksActivity.ACTIVITY_RESULT_LANGLINK_SELECT, GalleryActivity.ACTIVITY_RESULT_PAGE_SELECTED -> {
+                it.data?.let { data ->
+                    binding.pageToolbarContainer.post { handleIntent(data) }
+                }
+            }
+            LangLinksActivity.ACTIVITY_RESULT_AUTO_TRANSLATE -> {
+                it.data?.let { data ->
+                    val title = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        data.getParcelableExtra(Constants.ARG_TITLE, PageTitle::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        data.getParcelableExtra(Constants.ARG_TITLE)
+                    }
+                    title?.let { pageFragment.startAutoTranslation(it) }
+                }
             }
         }
     }

@@ -3,6 +3,9 @@ package org.wikipedia.settings
 import android.content.DialogInterface
 import android.content.Intent
 import android.os.Build
+import android.text.InputType
+import android.widget.EditText
+import android.widget.FrameLayout
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
@@ -105,6 +108,38 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
             }
         }
 
+        findPreference(R.string.preference_key_auto_translate_provider).let {
+            updateAutoTranslateProviderSummary()
+            it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                showAutoTranslateProviderPicker()
+                true
+            }
+        }
+
+        findPreference(R.string.preference_key_auto_translate_api_key).let {
+            updateAutoTranslateApiKeySummary()
+            it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                showAutoTranslateApiKeyDialog()
+                true
+            }
+        }
+
+        findPreference(R.string.preference_key_auto_translate_prompt).let {
+            updateAutoTranslatePromptSummary()
+            it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                showAutoTranslatePromptDialog()
+                true
+            }
+        }
+
+        findPreference(R.string.preference_key_auto_translate_concurrency).let {
+            updateAutoTranslateConcurrencySummary()
+            it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                showAutoTranslateConcurrencyDialog()
+                true
+            }
+        }
+
         findPreference(R.string.preference_key_about_wikipedia_app).onPreferenceClickListener = Preference.OnPreferenceClickListener {
             activity.startActivity(Intent(activity, AboutActivity::class.java))
             true
@@ -163,6 +198,122 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
 
     private fun deviceInformation(): String {
         return "\n\nVersion: ${BuildConfig.VERSION_NAME} \nDevice: ${Build.BRAND} ${Build.MODEL} (SDK: ${Build.VERSION.SDK_INT})\n"
+    }
+
+    private val autoTranslateProviders = listOf("Gemini Flash 2.0", "Claude Haiku", "GPT-4o mini", "DeepSeek V3", "GPT4Free (local)", "Groq Llama 3.3 70B")
+    private val autoTranslateProviderIds = listOf("gemini", "claude", "openai", "deepseek", "gpt4free", "groq")
+
+    private fun showAutoTranslateProviderPicker() {
+        val currentIndex = autoTranslateProviderIds.indexOf(Prefs.autoTranslateProvider).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.auto_translate_provider_dialog_title)
+            .setSingleChoiceItems(autoTranslateProviders.toTypedArray(), currentIndex) { dialog, which ->
+                Prefs.autoTranslateProvider = autoTranslateProviderIds[which]
+                updateAutoTranslateProviderSummary()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateAutoTranslateProviderSummary() {
+        val idx = autoTranslateProviderIds.indexOf(Prefs.autoTranslateProvider)
+        val name = if (idx >= 0) autoTranslateProviders[idx] else autoTranslateProviders[0]
+        findPreference(R.string.preference_key_auto_translate_provider).summary = name
+        if (Prefs.autoTranslateProvider.isEmpty()) Prefs.autoTranslateProvider = autoTranslateProviderIds[0]
+    }
+
+    private fun showAutoTranslateApiKeyDialog() {
+        val input = EditText(activity).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(Prefs.autoTranslateApiKey)
+        }
+        val container = FrameLayout(activity).apply {
+            val padding = (20 * activity.resources.displayMetrics.density).toInt()
+            setPadding(padding, 0, padding, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.auto_translate_api_key_dialog_title)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                Prefs.autoTranslateApiKey = input.text.toString().trim()
+                updateAutoTranslateApiKeySummary()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        if (Prefs.autoTranslateApiKey.isNotEmpty()) {
+            input.post { input.requestFocus(); input.selectAll() }
+        }
+    }
+
+    private fun updateAutoTranslateApiKeySummary() {
+        val key = Prefs.autoTranslateApiKey
+        val pref = findPreference(R.string.preference_key_auto_translate_api_key)
+        pref.summary = if (key.isNotEmpty()) "••••••••" + key.takeLast(4)
+                       else activity.getString(R.string.preference_summary_auto_translate_api_key_none)
+    }
+
+    private fun showAutoTranslatePromptDialog() {
+        val defaultPrompt = activity.getString(R.string.auto_translate_default_prompt)
+        val input = EditText(activity).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 4
+            setText(Prefs.autoTranslatePrompt.ifEmpty { defaultPrompt })
+        }
+        val container = FrameLayout(activity).apply {
+            val padding = (20 * activity.resources.displayMetrics.density).toInt()
+            setPadding(padding, 0, padding, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.auto_translate_prompt_dialog_title)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                Prefs.autoTranslatePrompt = input.text.toString().trim()
+                updateAutoTranslatePromptSummary()
+            }
+            .setNeutralButton(R.string.auto_translate_prompt_reset) { _, _ ->
+                Prefs.autoTranslatePrompt = ""
+                updateAutoTranslatePromptSummary()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateAutoTranslatePromptSummary() {
+        val prompt = Prefs.autoTranslatePrompt
+        val pref = findPreference(R.string.preference_key_auto_translate_prompt)
+        pref.summary = if (prompt.isNotEmpty()) prompt.take(60) + "…"
+                       else activity.getString(R.string.preference_summary_auto_translate_prompt_default)
+    }
+
+    private fun showAutoTranslateConcurrencyDialog() {
+        val input = EditText(activity).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(Prefs.autoTranslateConcurrency.toString())
+        }
+        val container = FrameLayout(activity).apply {
+            val padding = (20 * activity.resources.displayMetrics.density).toInt()
+            setPadding(padding, 0, padding, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.preference_title_auto_translate_concurrency)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val value = input.text.toString().toIntOrNull()?.coerceIn(1, 10) ?: 3
+                Prefs.autoTranslateConcurrency = value
+                updateAutoTranslateConcurrencySummary()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        input.post { input.requestFocus(); input.selectAll() }
+    }
+
+    private fun updateAutoTranslateConcurrencySummary() {
+        findPreference(R.string.preference_key_auto_translate_concurrency).summary =
+            activity.getString(R.string.preference_summary_auto_translate_concurrency) + " [${Prefs.autoTranslateConcurrency}]"
     }
 
     private fun showTranslateLanguagePicker() {

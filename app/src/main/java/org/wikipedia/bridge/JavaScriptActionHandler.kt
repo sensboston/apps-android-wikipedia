@@ -208,23 +208,28 @@ object JavaScriptActionHandler {
     }
 
     fun addTranslateLink(linkText: String): String {
+        val escapedText = linkText.replace("'", "\\'").replace("\\", "\\\\")
         return "(function() {" +
-                "var container = document.getElementById('pcs-footer-container-legal');" +
-                "if (!container) return;" +
-                "var existing = document.getElementById('pcs-translate-link');" +
-                "if (existing) return;" +
-                "var link = document.createElement('a');" +
-                "link.id = 'pcs-translate-link';" +
-                "link.className = 'pcs-footer-legal-link';" +
-                "link.href = '#';" +
-                "link.textContent = '${linkText.replace("'", "\\'")}';" +
-                "link.style.display = 'block';" +
-                "link.style.marginTop = '16px';" +
-                "link.addEventListener('click', function(e) {" +
-                "  e.preventDefault();" +
-                "  pcsClient.onReceiveMessage(JSON.stringify({action:'view_translated_in_browser'}));" +
-                "});" +
-                "container.appendChild(link);" +
+                "function inject() {" +
+                "  if (document.getElementById('pcs-translate-link')) return true;" +
+                "  var ref = document.getElementById('pcs-footer-container-legal');" +
+                "  if (!ref || !ref.parentNode) return false;" +
+                "  var link = document.createElement('div');" +
+                "  link.id = 'pcs-translate-link';" +
+                "  link.innerHTML = '<a href=\"#\" style=\"color:#36c; font-size:18px;\">$escapedText</a>';" +
+                "  link.style.cssText = 'margin:10px 0 24px 0;';" +
+                "  link.querySelector('a').addEventListener('click', function(e) {" +
+                "    e.preventDefault();" +
+                "    pcsClient.onReceiveMessage(JSON.stringify({action:'view_translated_in_browser'}));" +
+                "  });" +
+                "  ref.parentNode.insertBefore(link, ref.nextSibling);" +
+                "  return true;" +
+                "}" +
+                "if (inject()) return;" +
+                "var tries = 0;" +
+                "var timer = setInterval(function() {" +
+                "  if (inject() || ++tries > 20) clearInterval(timer);" +
+                "}, 500);" +
                 "})();"
     }
 
