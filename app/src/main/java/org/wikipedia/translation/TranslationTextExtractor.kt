@@ -4,16 +4,16 @@ import org.jsoup.Jsoup
 
 object TranslationTextExtractor {
 
-    private const val CHUNK_ELEMENTS = 15
+    private const val CHUNK_ELEMENTS = 7
 
     data class TextChunk(val indices: List<Int>, val texts: List<String>)
 
     fun extractChunks(html: String): List<TextChunk> {
         val doc = Jsoup.parse(html)
-        val allElements = doc.select("p, h2, h3, h4, li")
+        val allElements = doc.select("h1, p, h2, h3, h4, li")
 
         // Collect only non-empty elements but keep their REAL DOM index
-        // so they match JS querySelectorAll('p,h2,h3,h4,li') positions
+        // so they match JS querySelectorAll('h1,p,h2,h3,h4,li') positions
         val nonEmpty = allElements.mapIndexedNotNull { idx, el ->
             if (el.text().isNotBlank()) Pair(idx, el.html().trim()) else null
         }
@@ -30,7 +30,13 @@ object TranslationTextExtractor {
 
     fun buildChunkPrompt(targetLang: String, chunk: TextChunk): String {
         val lines = chunk.indices.zip(chunk.texts).joinToString("\n") { (idx, text) -> "§$idx: $text" }
-        return "Translate each line to $targetLang. Keep §N markers and all HTML tags unchanged — translate only the text between tags. Output only §N: translated content lines, one per line, nothing else:\n$lines"
+        return "You are a professional translator. Translate each line below into $targetLang.\n\n" +
+            "CRITICAL RULES:\n" +
+            "1. Write EVERY word in $targetLang using Cyrillic script. NEVER use Chinese, Japanese, Korean, Vietnamese, Arabic characters — not even a single one. If you know a concept in Chinese/Japanese, write its $targetLang equivalent in Cyrillic instead.\n" +
+            "2. NEVER mix Cyrillic and Latin letters within a single word. BAD examples: 'ДURRELL', 'Бournemouth'. GOOD: 'Даррелл', 'Борнмут'.\n" +
+            "3. Transliterate all proper names (people, cities) consistently using Cyrillic throughout. For 'Durrell' always use 'Даррелл'.\n" +
+            "4. Keep §N markers and all HTML tags exactly unchanged — translate only the visible text.\n" +
+            "5. Output ONLY lines in format §N: translated text — nothing else.\n\n$lines"
     }
 
     fun parseResponse(response: String): Map<Int, String> {
@@ -38,9 +44,16 @@ object TranslationTextExtractor {
         response.lines().forEach { line ->
             val match = Regex("^§(\\d+):\\s*(.+)$").find(line.trim())
             if (match != null) {
-                result[match.groupValues[1].toInt()] = match.groupValues[2]
+                result[match.groupValues[1].toInt()] = sanitize(match.groupValues[2])
             }
         }
         return result
+    }
+
+    // Remove CJK, Vietnamese diacritics, Arabic and other non-target characters that LLM may inject
+    private fun sanitize(text: String): String {
+        return text.replace(Regex("[\\u2E80-\\u9FFF\\uAC00-\\uD7AF\\uF900-\\uFAFF\\u1E00-\\u1EFF\\u0600-\\u06FF]"), "")
+            .replace(Regex("\\s{2,}"), " ")
+            .trim()
     }
 }

@@ -670,7 +670,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         val items = translations.entries.joinToString(",") { (idx, text) ->
             "{\"i\":$idx,\"t\":${JSONObject.quote(text)}}"
         }
-        val js = "(function(items){var all=document.querySelectorAll('p,h2,h3,h4,li');" +
+        val js = "(function(items){var all=document.querySelectorAll('h1,p,h2,h3,h4,li');" +
                 "items.forEach(function(item){if(all[item.i])all[item.i].innerHTML=item.t;});})([${items}]);"
         webView.evaluateJavascript(js, null)
     }
