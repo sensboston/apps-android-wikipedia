@@ -10,10 +10,10 @@ object TranslationTextExtractor {
 
     fun extractChunks(html: String): List<TextChunk> {
         val doc = Jsoup.parse(html)
-        val allElements = doc.select("h1, p, h2, h3, h4, li")
+        val allElements = doc.select("h1, p, h2, h3, h4, li, div.hatnote")
 
         // Collect only non-empty elements but keep their REAL DOM index
-        // so they match JS querySelectorAll('h1,p,h2,h3,h4,li') positions
+        // so they match JS querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote') positions
         val nonEmpty = allElements.mapIndexedNotNull { idx, el ->
             if (el.text().isNotBlank()) Pair(idx, el.html().trim()) else null
         }
@@ -36,7 +36,7 @@ object TranslationTextExtractor {
             "2. NEVER insert English or other European language words where a Russian word is needed. BAD: 'pending утверждения', 'сudden падением', 'którego'. GOOD: 'при условии утверждения', 'внезапным падением', 'которого'.\n" +
             "3. NEVER mix Cyrillic and Latin letters within a single word. BAD: 'ДURRELL', 'entwickanный'. GOOD: 'Даррелл', 'разработанный'.\n" +
             "4. Proper names of people and cities — transliterate to Cyrillic. Brand names, product names, technical abbreviations (Lucasfilm, THX, ILM) — keep in Latin as-is.\n" +
-            "5. Keep §N markers and all HTML tags exactly unchanged — translate only the visible text.\n" +
+            "5. Keep §N markers and all HTML tags exactly unchanged — translate only the visible text between tags. NEVER translate HTML attribute values (href, title, src, class, id, etc.).\n" +
             "6. Output ONLY lines in format §N: translated text — nothing else.\n\n$lines"
     }
 

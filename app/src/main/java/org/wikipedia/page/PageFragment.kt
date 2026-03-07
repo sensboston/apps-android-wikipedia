@@ -622,6 +622,14 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         if (targetLang.isEmpty()) return
         // Set lang immediately so hyphens:auto uses the correct dictionary from the first chunk
         webView.evaluateJavascript("document.documentElement.lang='$targetLang';", null)
+        // Save all link hrefs by position before any innerHTML replacement — will be restored after each chunk
+        webView.evaluateJavascript(
+            "(function(){var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
+            "window._wikiHrefs={};" +
+            "for(var i=0;i<all.length;i++){var links=all[i].querySelectorAll('a[href]');" +
+            "if(links.length){window._wikiHrefs[i]=[];" +
+            "for(var j=0;j<links.length;j++){window._wikiHrefs[i].push({h:links[j].getAttribute('href'),t:links[j].getAttribute('title')});}}}" +
+            "})()", null)
         val snackbar = FeedbackUtil.makeSnackbar(requireActivity(), getString(R.string.auto_translate_in_progress), Snackbar.LENGTH_INDEFINITE)
         snackbar.show()
         viewLifecycleOwner.lifecycleScope.launch {
@@ -680,8 +688,14 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         val items = translations.entries.joinToString(",") { (idx, text) ->
             "{\"i\":$idx,\"t\":${JSONObject.quote(text)}}"
         }
-        val js = "(function(items){var all=document.querySelectorAll('h1,p,h2,h3,h4,li');" +
-                "items.forEach(function(item){if(all[item.i])all[item.i].innerHTML=item.t;});})([${items}]);"
+        val js = "(function(items){var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');var saved=window._wikiHrefs||{};" +
+                "items.forEach(function(item){var el=all[item.i];if(!el)return;" +
+                "el.innerHTML=item.t;" +
+                "var hrefs=saved[item.i];if(hrefs){var links=el.querySelectorAll('a');" +
+                "for(var j=0;j<links.length&&j<hrefs.length;j++){" +
+                "links[j].setAttribute('href',hrefs[j].h);" +
+                "if(hrefs[j].t)links[j].setAttribute('title',hrefs[j].t);" +
+                "}}});})([${items}]);"
         webView.evaluateJavascript(js, null)
     }
 
