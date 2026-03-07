@@ -620,8 +620,11 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     fun startAutoTranslation(sourceTitle: PageTitle) {
         val targetLang = Prefs.translateLanguageCode
         if (targetLang.isEmpty()) return
-        // Set lang immediately so hyphens:auto uses the correct dictionary from the first chunk
-        webView.evaluateJavascript("document.documentElement.lang='$targetLang';", null)
+        // Set lang on root and all elements that have explicit lang attributes
+        // so hyphens:auto uses the correct dictionary (PCS may set lang="en" on inner containers)
+        webView.evaluateJavascript(
+            "document.documentElement.lang='$targetLang';" +
+            "document.querySelectorAll('[lang]').forEach(function(e){e.lang='$targetLang';});", null)
         // Save all link hrefs by position before any innerHTML replacement — will be restored after each chunk
         webView.evaluateJavascript(
             "(function(){var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
