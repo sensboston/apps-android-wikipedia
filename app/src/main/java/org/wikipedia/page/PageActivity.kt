@@ -132,6 +132,7 @@ class PageActivity : BaseActivity(), PageFragment.Callback, LinkPreviewDialog.Lo
     private val requestHandleIntentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         when (it.resultCode) {
             LangLinksActivity.ACTIVITY_RESULT_LANGLINK_SELECT, GalleryActivity.ACTIVITY_RESULT_PAGE_SELECTED -> {
+                pageFragment.clearAutoTranslate()
                 it.data?.let { data ->
                     binding.pageToolbarContainer.post { handleIntent(data) }
                 }

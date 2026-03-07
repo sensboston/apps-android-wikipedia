@@ -189,6 +189,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     private var avCallback: AvCallback? = null
     private var sections: MutableList<Section>? = null
     private var app = WikipediaApp.instance
+    private var autoTranslateOnLoad = false
 
     override lateinit var linkHandler: LinkHandler
     override lateinit var webView: ObservableWebView
@@ -612,9 +613,15 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         }
     }
 
+    fun clearAutoTranslate() {
+        autoTranslateOnLoad = false
+    }
+
     fun startAutoTranslation(sourceTitle: PageTitle) {
         val targetLang = Prefs.translateLanguageCode
         if (targetLang.isEmpty()) return
+        // Set lang immediately so hyphens:auto uses the correct dictionary from the first chunk
+        webView.evaluateJavascript("document.documentElement.lang='$targetLang';", null)
         val snackbar = FeedbackUtil.makeSnackbar(requireActivity(), getString(R.string.auto_translate_in_progress), Snackbar.LENGTH_INDEFINITE)
         snackbar.show()
         viewLifecycleOwner.lifecycleScope.launch {
@@ -654,6 +661,9 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                     }
                 }
                 firstError?.let { throw it }
+                // Reapply margins CSS so hyphens:auto re-evaluates with the already-set lang
+                bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
+                autoTranslateOnLoad = true
             } catch (e: Exception) {
                 val msg = e.message ?: e.toString()
                 android.util.Log.e("AutoTranslate", "Translation error: $msg", e)
@@ -853,6 +863,10 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             bridge.onPcsReady()
             articleInteractionEvent?.logLoaded()
             callback()?.onPageLoadComplete()
+            // If previous article was auto-translated, auto-translate this one too
+            if (autoTranslateOnLoad) {
+                model.title?.let { startAutoTranslation(it) }
+            }
 
             // do we have a URL fragment to scroll to?
             model.title?.let { prevTitle ->

@@ -32,11 +32,12 @@ object TranslationTextExtractor {
         val lines = chunk.indices.zip(chunk.texts).joinToString("\n") { (idx, text) -> "§$idx: $text" }
         return "You are a professional translator. Translate each line below into $targetLang.\n\n" +
             "CRITICAL RULES:\n" +
-            "1. Write EVERY word in $targetLang using Cyrillic script. NEVER use Chinese, Japanese, Korean, Vietnamese, Arabic characters — not even a single one. If you know a concept in Chinese/Japanese, write its $targetLang equivalent in Cyrillic instead.\n" +
-            "2. NEVER mix Cyrillic and Latin letters within a single word. BAD examples: 'ДURRELL', 'Бournemouth'. GOOD: 'Даррелл', 'Борнмут'.\n" +
-            "3. Transliterate all proper names (people, cities) consistently using Cyrillic throughout. For 'Durrell' always use 'Даррелл'.\n" +
-            "4. Keep §N markers and all HTML tags exactly unchanged — translate only the visible text.\n" +
-            "5. Output ONLY lines in format §N: translated text — nothing else.\n\n$lines"
+            "1. Write EVERY Russian word in Cyrillic script only. NEVER use Chinese, Japanese, Korean, Vietnamese, Arabic, Greek characters — not even a single one.\n" +
+            "2. NEVER insert English or other European language words where a Russian word is needed. BAD: 'pending утверждения', 'сudden падением', 'którego'. GOOD: 'при условии утверждения', 'внезапным падением', 'которого'.\n" +
+            "3. NEVER mix Cyrillic and Latin letters within a single word. BAD: 'ДURRELL', 'entwickanный'. GOOD: 'Даррелл', 'разработанный'.\n" +
+            "4. Proper names of people and cities — transliterate to Cyrillic. Brand names, product names, technical abbreviations (Lucasfilm, THX, ILM) — keep in Latin as-is.\n" +
+            "5. Keep §N markers and all HTML tags exactly unchanged — translate only the visible text.\n" +
+            "6. Output ONLY lines in format §N: translated text — nothing else.\n\n$lines"
     }
 
     fun parseResponse(response: String): Map<Int, String> {
@@ -50,9 +51,16 @@ object TranslationTextExtractor {
         return result
     }
 
-    // Remove CJK, Vietnamese diacritics, Arabic and other non-target characters that LLM may inject
+    // Remove CJK, Greek, Vietnamese diacritics, Arabic and other non-target characters that LLM may inject
     private fun sanitize(text: String): String {
-        return text.replace(Regex("[\\u2E80-\\u9FFF\\uAC00-\\uD7AF\\uF900-\\uFAFF\\u1E00-\\u1EFF\\u0600-\\u06FF]"), "")
+        return text.replace(Regex("[\\u2E80-\\u9FFF\\uAC00-\\uD7AF\\uF900-\\uFAFF\\u1E00-\\u1EFF\\u0600-\\u06FF\\u0370-\\u03FF]"), "")
+            // Fix words that mix Cyrillic and Latin scripts — remove the Latin chars from such words
+            .replace(Regex("[\\p{L}']+")) { mr ->
+                val word = mr.value
+                val hasCyrillic = word.any { it in '\u0400'..'\u04FF' }
+                val hasLatin = word.any { it in 'a'..'z' || it in 'A'..'Z' }
+                if (hasCyrillic && hasLatin) word.replace(Regex("[a-zA-Z]"), "") else word
+            }
             .replace(Regex("\\s{2,}"), " ")
             .trim()
     }
