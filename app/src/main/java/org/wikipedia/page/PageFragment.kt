@@ -688,7 +688,16 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                                 semaphore.withPermit {
                                     val prompt = TranslationTextExtractor.buildChunkPrompt(targetLang, chunk)
                                     val response = provider.translate(prompt, sourceLang, targetLang, "")
-                                    val translations = TranslationTextExtractor.parseResponse(response)
+                                    val translations = TranslationTextExtractor.parseResponse(response).toMutableMap()
+                                    // Retry any indices the LLM dropped (max_tokens truncation)
+                                    val missing = chunk.indices.filter { it !in translations }
+                                    if (missing.isNotEmpty()) {
+                                        val missingTexts = missing.map { idx -> chunk.texts[chunk.indices.indexOf(idx)] }
+                                        val miniChunk = TranslationTextExtractor.TextChunk(missing, missingTexts)
+                                        val miniPrompt = TranslationTextExtractor.buildChunkPrompt(targetLang, miniChunk)
+                                        val miniResponse = provider.translate(miniPrompt, sourceLang, targetLang, "")
+                                        translations.putAll(TranslationTextExtractor.parseResponse(miniResponse))
+                                    }
                                     // Persist each chunk immediately — survives cancellation and article switches
                                     TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, translations)
                                     withContext(Dispatchers.Main) {
