@@ -38,6 +38,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textview.MaterialTextView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
@@ -47,6 +48,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import org.wikipedia.translation.TranslationCache
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -190,6 +194,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     private var sections: MutableList<Section>? = null
     private var app = WikipediaApp.instance
     private var autoTranslateOnLoad = false
+    private var translationJob: Job? = null
 
     override lateinit var linkHandler: LinkHandler
     override lateinit var webView: ObservableWebView
@@ -615,11 +620,13 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
 
     fun clearAutoTranslate() {
         autoTranslateOnLoad = false
+        translationJob?.cancel()
     }
 
     fun startAutoTranslation(sourceTitle: PageTitle) {
         val targetLang = Prefs.translateLanguageCode
         if (targetLang.isEmpty()) return
+        val sourceLang = sourceTitle.wikiSite.languageCode
         // Set lang on root and all elements that have explicit lang attributes
         // so hyphens:auto uses the correct dictionary (PCS may set lang="en" on inner containers)
         webView.evaluateJavascript(
@@ -634,8 +641,10 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             "for(var j=0;j<links.length;j++){window._wikiHrefs[i].push({h:links[j].getAttribute('href'),t:links[j].getAttribute('title')});}}}" +
             "})()", null)
         val snackbar = FeedbackUtil.makeSnackbar(requireActivity(), getString(R.string.auto_translate_in_progress), Snackbar.LENGTH_INDEFINITE)
+        snackbar.setAction(getString(android.R.string.cancel)) { translationJob?.cancel() }
         snackbar.show()
-        viewLifecycleOwner.lifecycleScope.launch {
+        translationJob?.cancel()
+        translationJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val html = withContext(Dispatchers.IO) {
                     ServiceFactory.getRest(sourceTitle.wikiSite)
@@ -643,44 +652,71 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                         .string()
                 }
                 val chunks = TranslationTextExtractor.extractChunks(html)
+                // Check cache — if all current section indices are cached, inject directly without API calls
+                val cachedMap = withContext(Dispatchers.IO) {
+                    TranslationCache.get(sourceTitle.prefixedText, sourceLang, targetLang)
+                }
+                val allIndices = chunks.flatMap { it.indices }.toSet()
+                if (cachedMap != null && allIndices.all { it in cachedMap }) {
+                    snackbar.setText(getString(R.string.auto_translate_in_progress_n, chunks.size, chunks.size))
+                    injectTranslations(cachedMap)
+                    bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
+                    autoTranslateOnLoad = true
+                    return@launch
+                }
                 val provider = TranslationManager.getProvider()
                 val semaphore = Semaphore(Prefs.autoTranslateConcurrency)
                 snackbar.setText(getString(R.string.auto_translate_in_progress_n, 0, chunks.size))
-                var completed = 0
-                var firstError: Exception? = null
+                val completed = AtomicInteger(0)
+                val firstError = AtomicReference<Exception?>(null)
                 supervisorScope {
                     chunks.map { chunk ->
                         async(Dispatchers.IO) {
+                            // Serve from partial cache if all indices for this chunk are available
+                            val chunkCached = cachedMap != null && chunk.indices.all { it in cachedMap }
+                            if (chunkCached) {
+                                val cache = cachedMap ?: return@async
+                                val translations = chunk.indices.associateWith { cache.getValue(it) }
+                                withContext(Dispatchers.Main) {
+                                    val n = completed.incrementAndGet()
+                                    snackbar.setText(getString(R.string.auto_translate_in_progress_n, n, chunks.size))
+                                    injectTranslations(translations)
+                                }
+                                return@async
+                            }
                             try {
                                 semaphore.withPermit {
                                     val prompt = TranslationTextExtractor.buildChunkPrompt(targetLang, chunk)
-                                    val response = provider.translate(prompt, sourceTitle.wikiSite.languageCode, targetLang, "")
-                                    TranslationTextExtractor.parseResponse(response)
+                                    val response = provider.translate(prompt, sourceLang, targetLang, "")
+                                    val translations = TranslationTextExtractor.parseResponse(response)
+                                    // Persist each chunk immediately — survives cancellation and article switches
+                                    TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, translations)
+                                    withContext(Dispatchers.Main) {
+                                        val n = completed.incrementAndGet()
+                                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, n, chunks.size))
+                                        if (translations.isNotEmpty()) injectTranslations(translations)
+                                    }
                                 }
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                if (firstError == null) firstError = e
-                                emptyMap()
+                                firstError.compareAndSet(null, e)
                             }
                         }
-                    }.forEach { deferred ->
-                        val translations = deferred.await()
-                        completed++
-                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, completed, chunks.size))
-                        if (translations.isNotEmpty()) injectTranslations(translations)
-                    }
+                    }.awaitAll()
                 }
-                firstError?.let { throw it }
+                firstError.get()?.let { throw it }
                 // Reapply margins CSS so hyphens:auto re-evaluates with the already-set lang
                 bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
                 autoTranslateOnLoad = true
             } catch (e: Exception) {
-                val msg = e.message ?: e.toString()
-                android.util.Log.e("AutoTranslate", "Translation error: $msg", e)
-                FeedbackUtil.makeSnackbar(requireActivity(), msg, Snackbar.LENGTH_INDEFINITE)
-                    .setAction(android.R.string.ok) { }
-                    .show()
+                if (e !is CancellationException) {
+                    val msg = e.message ?: e.toString()
+                    android.util.Log.e("AutoTranslate", "Translation error: $msg", e)
+                    FeedbackUtil.makeSnackbar(requireActivity(), msg, Snackbar.LENGTH_INDEFINITE)
+                        .setAction(android.R.string.ok) { }
+                        .show()
+                }
             } finally {
                 snackbar.dismiss()
             }

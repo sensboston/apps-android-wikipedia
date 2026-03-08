@@ -6,10 +6,9 @@ interface TranslationProvider {
 
 enum class TranslationProviderType(val id: String, val displayName: String) {
     OPENAI("openai", "GPT-4o mini"),
-    GROQ("groq", "Groq Llama 3.3 70B"),
     GEMINI("gemini", "Gemini Flash 2.0");
 
     companion object {
-        fun fromId(id: String) = entries.firstOrNull { it.id == id } ?: GEMINI
+        fun fromId(id: String) = entries.firstOrNull { it.id == id } ?: OPENAI
     }
 }
