@@ -284,6 +284,7 @@
   <string name="about_description">Over de Wikipedia-app</string>
   <string name="privacy_policy_description">Privacybeleid</string>
   <string name="terms_of_use_description">Gebruiksvoorwaarden</string>
+  <string name="legal_safety_contacts_description">Juridische en veiligheidscontacten</string>
   <string name="about_wikipedia_url">https://nl.wikipedia.org/wiki/Help:Unieke_van_Wikipedia</string>
   <string name="privacy_policy_url">https://foundation.wikimedia.org/wiki/Special:MyLanguage/Privacy_policy</string>
   <string name="terms_of_use_url">https://foundation.wikimedia.org/wiki/Special:MyLanguage/Terms_of_Use</string>
@@ -2268,11 +2269,11 @@
   <string name="hybrid_search_onboarding_search_example_query_biggest_cities_europe">Wat zijn de grootste steden van Europa?</string>
   <string name="hybrid_search_onboarding_screen_title">Een nieuwe manier om te zoeken</string>
   <string name="hybrid_search_results_header_description">Afkomstig uit door mensen geschreven Wikipedia-pagina\'s</string>
-  <string name="hybrid_search_results_more_button">Meer</string>
-  <string name="hybrid_search_results_rate_label">Deze resultaten beoordelen</string>
+  <string name="hybrid_search_results_rate_label">Dit resultaat beoordelen</string>
   <string name="hybrid_search_results_rated_label">Beoordeeld</string>
   <string name="hybrid_search_results_rate_thumb_up">Geef een duim omhoog!</string>
   <string name="hybrid_search_results_rate_thumb_down">Geef een duim omlaag</string>
+  <string name="hybrid_lexical_search_results_empty">Er is geen artikeltitel die overeenkomt met deze zoekopdracht.</string>
   <string name="hybrid_search_results_empty">De uitgebreide zoekfunctie is tijdelijk niet beschikbaar.</string>
   <string name="hybrid_search_no_results_header">Geen resultaten</string>
   <string name="hybrid_search_no_results_description">Dit onderwerp geeft momenteel geen paginafragmenten weer. Hier zijn een paar dingen die u kunt proberen:</string>
@@ -2280,4 +2281,5 @@
   <string name="hybrid_search_no_results_suggestion_try_related_topic">Probeer een gerelateerd onderwerp</string>
   <string name="hybrid_search_error_message">Er is iets misgegaan. Probeer het later opnieuw.</string>
   <string name="hybrid_search_who_is_prefix">Wie is %s?</string>
+  <string name="hybrid_search_turn_off_experiment_label">Dit experiment uit uitschakelen</string>
 </resources>

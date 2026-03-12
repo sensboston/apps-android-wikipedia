@@ -7,6 +7,7 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -542,7 +543,6 @@ class ActivityTabFragment : Fragment() {
                                         requireActivity().startActivity(OnThisDayGameActivity.newIntent(
                                             context = requireContext(),
                                             invokeSource = Constants.InvokeSource.ACTIVITY_TAB,
-
                                             wikiSite = WikipediaApp.instance.wikiSite
                                         ))
                                     },
@@ -946,12 +946,13 @@ fun CommonCardHeader(
 fun ActivityTabShimmerView(
     size: Dp = 120.dp
 ) {
+    val transition = rememberInfiniteTransition()
     Box(
         modifier = Modifier
             .padding(16.dp)
             .clip(RoundedCornerShape(size = 12.dp))
             .fillMaxWidth()
-            .shimmerEffect()
+            .shimmerEffect(transition = transition)
             .size(size)
     )
 }

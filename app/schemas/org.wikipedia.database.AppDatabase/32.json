@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 32,
-    "identityHash": "d34ca7385e4437ab96c1a6759dbd21c5",
+    "identityHash": "13caecc46590fb1cbfddc84dfcd32263",
     "entities": [
       {
         "tableName": "HistoryEntry",
@@ -598,7 +598,7 @@
       },
       {
         "tableName": "DailyGameHistory",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameName` INTEGER NOT NULL, `language` TEXT NOT NULL, `year` INTEGER NOT NULL, `month` INTEGER NOT NULL, `day` INTEGER NOT NULL, `score` INTEGER NOT NULL, `playType` INTEGER NOT NULL, `gameData` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameName` INTEGER NOT NULL, `language` TEXT NOT NULL, `year` INTEGER NOT NULL, `month` INTEGER NOT NULL, `day` INTEGER NOT NULL, `score` INTEGER NOT NULL, `playType` INTEGER NOT NULL, `gameData` TEXT, `status` INTEGER NOT NULL, `currentQuestionIndex` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -652,6 +652,18 @@
             "fieldPath": "gameData",
             "columnName": "gameData",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentQuestionIndex",
+            "columnName": "currentQuestionIndex",
+            "affinity": "INTEGER",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -730,62 +742,11 @@
             "id"
           ]
         }
-      },
-      {
-        "tableName": "TranslationCacheEntry",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`title` TEXT NOT NULL, `sourceLang` TEXT NOT NULL, `targetLang` TEXT NOT NULL, `sectionIndex` INTEGER NOT NULL, `translatedHtml` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`title`, `sourceLang`, `targetLang`, `sectionIndex`))",
-        "fields": [
-          {
-            "fieldPath": "title",
-            "columnName": "title",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "sourceLang",
-            "columnName": "sourceLang",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "targetLang",
-            "columnName": "targetLang",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "sectionIndex",
-            "columnName": "sectionIndex",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "translatedHtml",
-            "columnName": "translatedHtml",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "timestamp",
-            "columnName": "timestamp",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "title",
-            "sourceLang",
-            "targetLang",
-            "sectionIndex"
-          ]
-        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd34ca7385e4437ab96c1a6759dbd21c5')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '13caecc46590fb1cbfddc84dfcd32263')"
     ]
   }
 }
