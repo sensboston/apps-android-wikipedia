@@ -31,7 +31,7 @@ object TranslationTextExtractor {
     // Returns combined HTML with data-wt="domIndex" on each element, and the list of domIndices in order
     fun extractForGoogle(html: String): Pair<String, List<Int>> {
         val doc = Jsoup.parse(html)
-        val allElements = doc.select("h1, p, h2, h3, h4, li, div.hatnote")
+        val allElements = doc.select("h1, p, h2, h3, h4, li, div.hatnote, td, th")
         val nonEmpty = allElements.mapIndexedNotNull { idx, el ->
             if (el.text().isNotBlank()) Pair(idx, el) else null
         }
@@ -49,6 +49,11 @@ object TranslationTextExtractor {
             result[idx] = el.html()
         }
         return result
+    }
+
+    fun extractRevisionId(html: String): String {
+        val doc = Jsoup.parse(html)
+        return doc.select("meta[property=mw:revisionSHA1]").attr("content")
     }
 
     fun buildChunkPrompt(targetLang: String, chunk: TextChunk): String {

@@ -386,9 +386,9 @@
     <string name="preference_summary_translate_language">Language: %s</string>
     <string name="preference_summary_translate_language_none">Tap to select target language</string>
     <string name="auto_translate_section_title">Auto translate</string>
-    <string name="auto_translate_lang_item">%s (AI translate)</string>
+    <string name="auto_translate_lang_item">%s (Авто)</string>
     <string name="auto_translate_source_lang_subtitle">Original article</string>
-    <string name="auto_translate_lang_item_subtitle">Translate with AI</string>
+    <string name="auto_translate_lang_item_subtitle">Auto-translate</string>
     <string name="auto_translate_in_progress">Translating article…</string>
     <string name="auto_translate_in_progress_n">Translating… %1$d/%2$d</string>
     <string name="auto_translate_error">Translation failed: %s</string>

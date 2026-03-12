@@ -1,26 +1,8 @@
 package org.wikipedia.translation
 
-import org.wikipedia.R
-import org.wikipedia.WikipediaApp
-import org.wikipedia.settings.Prefs
-
 object TranslationManager {
 
-    fun getProvider(): TranslationProvider {
-        val apiKey = Prefs.autoTranslateApiKey
-        return when (TranslationProviderType.fromId(Prefs.autoTranslateProvider)) {
-            TranslationProviderType.GOOGLE -> GoogleTranslationProvider()
-            TranslationProviderType.OPENAI -> OpenAITranslationProvider(apiKey)
-            TranslationProviderType.GEMINI -> GeminiTranslationProvider(apiKey)
-        }
-    }
+    fun getProvider(): TranslationProvider = GoogleTranslationProvider()
 
-    fun isGoogleProvider() = TranslationProviderType.fromId(Prefs.autoTranslateProvider) == TranslationProviderType.GOOGLE
-
-    fun buildPrompt(sourceLang: String, targetLang: String): String {
-        val template = Prefs.autoTranslatePrompt.ifEmpty {
-            WikipediaApp.instance.getString(R.string.auto_translate_default_prompt)
-        }
-        return template.replace("{source}", sourceLang).replace("{target}", targetLang)
-    }
+    fun isGoogleProvider() = true
 }

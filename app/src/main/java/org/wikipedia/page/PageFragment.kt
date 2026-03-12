@@ -39,17 +39,10 @@ import com.google.android.material.textview.MaterialTextView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 import org.wikipedia.translation.TranslationCache
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
@@ -622,7 +615,12 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         translationJob?.cancel()
         if (autoTranslateOnLoad) {
             autoTranslateOnLoad = false
-            webView.reload()
+            // Reload via Wikipedia infrastructure (not webView.reload) so margins/justification are reapplied
+            model.title?.let { title ->
+                model.curEntry?.let { entry ->
+                    loadPage(title, entry, pushBackStack = false, squashBackstack = false, isRefresh = true)
+                }
+            }
         } else {
             autoTranslateOnLoad = false
         }
@@ -657,83 +655,31 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                         .string()
                 }
                 if (TranslationManager.isGoogleProvider()) {
-                    val (combinedHtml, _) = TranslationTextExtractor.extractForGoogle(html)
-                    val translatedHtml = withContext(Dispatchers.IO) {
-                        TranslationManager.getProvider().translate(combinedHtml, sourceLang, targetLang, "")
+                    val revisionId = TranslationTextExtractor.extractRevisionId(html)
+                    val cached = if (revisionId.isNotEmpty()) {
+                        withContext(Dispatchers.IO) {
+                            TranslationCache.get(sourceTitle.prefixedText, sourceLang, targetLang, revisionId)
+                        }
+                    } else null
+                    val translations = if (cached != null) {
+                        TranslationTextExtractor.parseGoogleResponse(cached)
+                    } else {
+                        val (combinedHtml, _) = TranslationTextExtractor.extractForGoogle(html)
+                        val translatedHtml = withContext(Dispatchers.IO) {
+                            TranslationManager.getProvider().translate(combinedHtml, sourceLang, targetLang, "")
+                        }
+                        if (revisionId.isNotEmpty()) {
+                            withContext(Dispatchers.IO) {
+                                TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, revisionId, translatedHtml)
+                            }
+                        }
+                        TranslationTextExtractor.parseGoogleResponse(translatedHtml)
                     }
-                    val translations = TranslationTextExtractor.parseGoogleResponse(translatedHtml)
                     injectTranslationsGoogle(translations)
                     bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
                     autoTranslateOnLoad = true
                     return@launch
                 }
-                val chunks = TranslationTextExtractor.extractChunks(html)
-                // Check cache — if all current section indices are cached, inject directly without API calls
-                val cachedMap = withContext(Dispatchers.IO) {
-                    TranslationCache.get(sourceTitle.prefixedText, sourceLang, targetLang)
-                }
-                val allIndices = chunks.flatMap { it.indices }.toSet()
-                if (cachedMap != null && allIndices.all { it in cachedMap }) {
-                    snackbar.setText(getString(R.string.auto_translate_in_progress_n, chunks.size, chunks.size))
-                    injectTranslations(cachedMap)
-                    bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
-                    autoTranslateOnLoad = true
-                    return@launch
-                }
-                val provider = TranslationManager.getProvider()
-                val semaphore = Semaphore(Prefs.autoTranslateConcurrency)
-                snackbar.setText(getString(R.string.auto_translate_in_progress_n, 0, chunks.size))
-                val completed = AtomicInteger(0)
-                val firstError = AtomicReference<Exception?>(null)
-                supervisorScope {
-                    chunks.map { chunk ->
-                        async(Dispatchers.IO) {
-                            // Serve from partial cache if all indices for this chunk are available
-                            val chunkCached = cachedMap != null && chunk.indices.all { it in cachedMap }
-                            if (chunkCached) {
-                                val cache = cachedMap ?: return@async
-                                val translations = chunk.indices.associateWith { cache.getValue(it) }
-                                withContext(Dispatchers.Main) {
-                                    val n = completed.incrementAndGet()
-                                    snackbar.setText(getString(R.string.auto_translate_in_progress_n, n, chunks.size))
-                                    injectTranslations(translations)
-                                }
-                                return@async
-                            }
-                            try {
-                                semaphore.withPermit {
-                                    val prompt = TranslationTextExtractor.buildChunkPrompt(targetLang, chunk)
-                                    val response = provider.translate(prompt, sourceLang, targetLang, "")
-                                    val translations = TranslationTextExtractor.parseResponse(response).toMutableMap()
-                                    // Retry any indices the LLM dropped (max_tokens truncation)
-                                    val missing = chunk.indices.filter { it !in translations }
-                                    if (missing.isNotEmpty()) {
-                                        val missingTexts = missing.map { idx -> chunk.texts[chunk.indices.indexOf(idx)] }
-                                        val miniChunk = TranslationTextExtractor.TextChunk(missing, missingTexts)
-                                        val miniPrompt = TranslationTextExtractor.buildChunkPrompt(targetLang, miniChunk)
-                                        val miniResponse = provider.translate(miniPrompt, sourceLang, targetLang, "")
-                                        translations.putAll(TranslationTextExtractor.parseResponse(miniResponse))
-                                    }
-                                    // Persist each chunk immediately — survives cancellation and article switches
-                                    TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, translations)
-                                    withContext(Dispatchers.Main) {
-                                        val n = completed.incrementAndGet()
-                                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, n, chunks.size))
-                                        if (translations.isNotEmpty()) injectTranslations(translations)
-                                    }
-                                }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                firstError.compareAndSet(null, e)
-                            }
-                        }
-                    }.awaitAll()
-                }
-                firstError.get()?.let { throw it }
-                // Reapply margins CSS so hyphens:auto re-evaluates with the already-set lang
-                bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
-                autoTranslateOnLoad = true
             } catch (e: Exception) {
                 if (e !is CancellationException) {
                     val msg = e.message ?: e.toString()
@@ -768,7 +714,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             "{\"i\":$idx,\"t\":${JSONObject.quote(text)}}"
         }
         val js = "(function(items){" +
-                "var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
+                "var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote,td,th');" +
                 "items.forEach(function(item){var el=all[item.i];if(el)el.innerHTML=item.t;});" +
                 "})([${items}]);"
         webView.evaluateJavascript(js, null)
@@ -1202,6 +1148,12 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         }
 
         EventPlatformClient.AssociationController.beginNewPageView()
+
+        // Sticky auto-translate only follows internal links — reset for search, back-stack, etc.
+        if (entry.source != HistoryEntry.SOURCE_INTERNAL_LINK) {
+            autoTranslateOnLoad = false
+            translationJob?.cancel()
+        }
 
         // update the time spent reading of the current page, before loading the new one
         addTimeSpentReading(activeTimer.elapsedSec)

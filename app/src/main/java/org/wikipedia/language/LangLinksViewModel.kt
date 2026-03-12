@@ -117,7 +117,7 @@ class LangLinksViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
 
     private fun buildAutoTranslateItem(): LangLinksItem? {
         val targetLangCode = Prefs.translateLanguageCode
-        if (targetLangCode.isEmpty() || Prefs.autoTranslateApiKey.isEmpty()) return null
+        if (targetLangCode.isEmpty()) return null
         if (targetLangCode == pageTitle.wikiSite.languageCode) return null
         val targetLangName = (app.languageState.getAppLanguageLocalizedName(targetLangCode) ?: targetLangCode).replaceFirstChar { it.uppercaseChar() }
         return LangLinksItem(

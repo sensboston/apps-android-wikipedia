@@ -40,7 +40,7 @@ import org.wikipedia.translation.TranslationCacheEntry
 import java.time.LocalDate
 
 const val DATABASE_NAME = "wikipedia.db"
-const val DATABASE_VERSION = 32
+const val DATABASE_VERSION = 33
 
 @Database(
     entities = [
@@ -331,6 +331,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `TranslationCacheEntry`")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `TranslationCacheEntry` " +
+                    "(`title` TEXT NOT NULL, `sourceLang` TEXT NOT NULL, `targetLang` TEXT NOT NULL, " +
+                    "`revisionId` TEXT NOT NULL, `translatedHtml` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`title`, `sourceLang`, `targetLang`))")
+            }
+        }
+
         val MIGRATION_30_31 = object : Migration(30, 31) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Step 1: Create a temporary table
@@ -366,7 +376,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23,
                     MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27,
                     MIGRATION_26_28, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30,
-                    MIGRATION_30_31, MIGRATION_31_32)
+                    MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33)
                 .fallbackToDestructiveMigration(false)
                 .build()
         }
