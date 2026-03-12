@@ -9,10 +9,13 @@ object TranslationManager {
     fun getProvider(): TranslationProvider {
         val apiKey = Prefs.autoTranslateApiKey
         return when (TranslationProviderType.fromId(Prefs.autoTranslateProvider)) {
+            TranslationProviderType.GOOGLE -> GoogleTranslationProvider()
             TranslationProviderType.OPENAI -> OpenAITranslationProvider(apiKey)
             TranslationProviderType.GEMINI -> GeminiTranslationProvider(apiKey)
         }
     }
+
+    fun isGoogleProvider() = TranslationProviderType.fromId(Prefs.autoTranslateProvider) == TranslationProviderType.GOOGLE
 
     fun buildPrompt(sourceLang: String, targetLang: String): String {
         val template = Prefs.autoTranslatePrompt.ifEmpty {

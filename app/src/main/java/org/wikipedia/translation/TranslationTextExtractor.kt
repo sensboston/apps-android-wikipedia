@@ -28,6 +28,29 @@ object TranslationTextExtractor {
         return chunks
     }
 
+    // Returns combined HTML with data-wt="domIndex" on each element, and the list of domIndices in order
+    fun extractForGoogle(html: String): Pair<String, List<Int>> {
+        val doc = Jsoup.parse(html)
+        val allElements = doc.select("h1, p, h2, h3, h4, li, div.hatnote")
+        val nonEmpty = allElements.mapIndexedNotNull { idx, el ->
+            if (el.text().isNotBlank()) Pair(idx, el) else null
+        }
+        nonEmpty.forEach { (idx, el) -> el.attr("data-wt", idx.toString()) }
+        val combined = nonEmpty.joinToString("") { (_, el) -> el.outerHtml() }
+        return Pair(combined, nonEmpty.map { it.first })
+    }
+
+    fun parseGoogleResponse(translatedHtml: String): Map<Int, String> {
+        val doc = Jsoup.parse(translatedHtml)
+        val result = mutableMapOf<Int, String>()
+        doc.select("[data-wt]").forEach { el ->
+            val idx = el.attr("data-wt").toIntOrNull() ?: return@forEach
+            el.removeAttr("data-wt")
+            result[idx] = el.html()
+        }
+        return result
+    }
+
     fun buildChunkPrompt(targetLang: String, chunk: TextChunk): String {
         val lines = chunk.indices.zip(chunk.texts).joinToString("\n") { (idx, text) -> "§$idx: $text" }
         return "You are a professional translator. Translate each line below into $targetLang.\n\n" +

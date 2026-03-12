@@ -619,8 +619,13 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     }
 
     fun clearAutoTranslate() {
-        autoTranslateOnLoad = false
         translationJob?.cancel()
+        if (autoTranslateOnLoad) {
+            autoTranslateOnLoad = false
+            webView.reload()
+        } else {
+            autoTranslateOnLoad = false
+        }
     }
 
     fun startAutoTranslation(sourceTitle: PageTitle) {
@@ -650,6 +655,17 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                     ServiceFactory.getRest(sourceTitle.wikiSite)
                         .getPageMobileHtml(UriUtil.encodeURL(sourceTitle.prefixedText))
                         .string()
+                }
+                if (TranslationManager.isGoogleProvider()) {
+                    val (combinedHtml, _) = TranslationTextExtractor.extractForGoogle(html)
+                    val translatedHtml = withContext(Dispatchers.IO) {
+                        TranslationManager.getProvider().translate(combinedHtml, sourceLang, targetLang, "")
+                    }
+                    val translations = TranslationTextExtractor.parseGoogleResponse(translatedHtml)
+                    injectTranslationsGoogle(translations)
+                    bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
+                    autoTranslateOnLoad = true
+                    return@launch
                 }
                 val chunks = TranslationTextExtractor.extractChunks(html)
                 // Check cache — if all current section indices are cached, inject directly without API calls
@@ -744,6 +760,17 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 "links[j].setAttribute('href',hrefs[j].h);" +
                 "if(hrefs[j].t)links[j].setAttribute('title',hrefs[j].t);" +
                 "}}});})([${items}]);"
+        webView.evaluateJavascript(js, null)
+    }
+
+    private fun injectTranslationsGoogle(translations: Map<Int, String>) {
+        val items = translations.entries.joinToString(",") { (idx, text) ->
+            "{\"i\":$idx,\"t\":${JSONObject.quote(text)}}"
+        }
+        val js = "(function(items){" +
+                "var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
+                "items.forEach(function(item){var el=all[item.i];if(el)el.innerHTML=item.t;});" +
+                "})([${items}]);"
         webView.evaluateJavascript(js, null)
     }
 
