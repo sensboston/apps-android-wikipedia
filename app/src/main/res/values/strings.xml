@@ -386,6 +386,9 @@
     <string name="preference_summary_translate_language">Language: %s</string>
     <string name="preference_summary_translate_language_none">Tap to select target language</string>
     <string name="preference_title_translate_clear_cache">Translation cache</string>
+    <string name="preference_title_translate_show_progress">Show translation progress</string>
+    <string name="translate_clear_cache_confirm_title">Clear translation cache?</string>
+    <string name="translate_clear_cache_confirm_message">This will delete all cached translations. Articles will need to be re-translated.</string>
     <string name="preference_summary_translate_clear_cache_empty">No cached translations</string>
     <string name="preference_summary_translate_clear_cache">%d article(s) cached — tap to clear</string>
     <string name="auto_translate_section_title">Auto translate</string>

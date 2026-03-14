@@ -652,7 +652,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             "})()", null)
         val snackbar = FeedbackUtil.makeSnackbar(requireActivity(), getString(R.string.auto_translate_in_progress), Snackbar.LENGTH_INDEFINITE)
         snackbar.setAction(getString(android.R.string.cancel)) { translationJob?.cancel() }
-        snackbar.show()
+        if (Prefs.translateShowProgress) snackbar.show()
         translationJob?.cancel()
         translationJob = viewLifecycleOwner.lifecycleScope.launch {
             try {

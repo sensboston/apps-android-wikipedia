@@ -113,11 +113,18 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
         findPreference(R.string.preference_key_translate_clear_cache).let { pref ->
             updateTranslateCacheSummary(pref)
             pref.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                CoroutineScope(Dispatchers.Main).launch {
-                    withContext(Dispatchers.IO) { TranslationCache.clearAll() }
-                    updateTranslateCacheSummary(pref)
-                    FeedbackUtil.showMessage(activity, activity.getString(R.string.preference_summary_translate_clear_cache_empty))
-                }
+                MaterialAlertDialogBuilder(activity)
+                    .setTitle(R.string.translate_clear_cache_confirm_title)
+                    .setMessage(R.string.translate_clear_cache_confirm_message)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        CoroutineScope(Dispatchers.Main).launch {
+                            withContext(Dispatchers.IO) { TranslationCache.clearAll() }
+                            updateTranslateCacheSummary(pref)
+                            FeedbackUtil.showMessage(activity, activity.getString(R.string.preference_summary_translate_clear_cache_empty))
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
                 true
             }
         }
