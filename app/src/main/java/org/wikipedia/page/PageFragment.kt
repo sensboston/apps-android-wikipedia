@@ -40,9 +40,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import org.wikipedia.translation.TranslationCache
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
@@ -651,7 +658,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             try {
                 val html = withContext(Dispatchers.IO) {
                     ServiceFactory.getRest(sourceTitle.wikiSite)
-                        .getPageMobileHtml(UriUtil.encodeURL(sourceTitle.prefixedText))
+                        .getPageMobileHtml(sourceTitle.prefixedText)
                         .string()
                 }
                 if (TranslationManager.isGoogleProvider()) {
@@ -664,16 +671,35 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                     val translations = if (cached != null) {
                         TranslationTextExtractor.parseGoogleResponse(cached)
                     } else {
-                        val (combinedHtml, _) = TranslationTextExtractor.extractForGoogle(html)
-                        val translatedHtml = withContext(Dispatchers.IO) {
-                            TranslationManager.getProvider().translate(combinedHtml, sourceLang, targetLang, "")
+                        val chunks = TranslationTextExtractor.extractForGoogle(html)
+                        val resultHtml = arrayOfNulls<String>(chunks.size)
+                        val allTranslations = mutableMapOf<Int, String>()
+                        val doneCount = AtomicInteger(0)
+                        val semaphore = Semaphore(5)
+                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, 0, chunks.size))
+                        coroutineScope {
+                            chunks.mapIndexed { index, (chunkHtml, _) ->
+                                async {
+                                    semaphore.withPermit {
+                                        val translatedChunk = withContext(Dispatchers.IO) {
+                                            TranslationManager.getProvider().translate(chunkHtml, sourceLang, targetLang, "")
+                                        }
+                                        val parsed = TranslationTextExtractor.parseGoogleResponse(translatedChunk)
+                                        resultHtml[index] = translatedChunk
+                                        allTranslations.putAll(parsed)
+                                        injectTranslationsGoogle(parsed)
+                                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, doneCount.incrementAndGet(), chunks.size))
+                                    }
+                                }
+                            }.awaitAll()
                         }
                         if (revisionId.isNotEmpty()) {
+                            val combined = resultHtml.filterNotNull().joinToString("")
                             withContext(Dispatchers.IO) {
-                                TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, revisionId, translatedHtml)
+                                TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, revisionId, combined)
                             }
                         }
-                        TranslationTextExtractor.parseGoogleResponse(translatedHtml)
+                        allTranslations
                     }
                     injectTranslationsGoogle(translations)
                     bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
@@ -714,7 +740,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             "{\"i\":$idx,\"t\":${JSONObject.quote(text)}}"
         }
         val js = "(function(items){" +
-                "var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote,td,th');" +
+                "var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
                 "items.forEach(function(item){var el=all[item.i];if(el)el.innerHTML=item.t;});" +
                 "})([${items}]);"
         webView.evaluateJavascript(js, null)

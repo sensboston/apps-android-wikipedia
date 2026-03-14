@@ -24,6 +24,13 @@ object TranslationCache {
         return if (entry.revisionId == revisionId) entry.translatedHtml else null
     }
 
+    suspend fun count(): Int = AppDatabase.instance.translationCacheDao().count()
+
+    suspend fun clearAll() {
+        AppDatabase.instance.translationCacheDao().deleteAll()
+        memCache.clear()
+    }
+
     suspend fun save(title: String, sourceLang: String, targetLang: String, revisionId: String, translatedHtml: String) {
         val now = System.currentTimeMillis()
         val entry = TranslationCacheEntry(title, sourceLang, targetLang, revisionId, translatedHtml, now)

@@ -16,4 +16,10 @@ interface TranslationCacheDao {
 
     @Query("DELETE FROM TranslationCacheEntry WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
+
+    @Query("SELECT COUNT(*) FROM TranslationCacheEntry")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM TranslationCacheEntry")
+    suspend fun deleteAll()
 }

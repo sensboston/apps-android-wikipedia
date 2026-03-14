@@ -28,24 +28,45 @@ object TranslationTextExtractor {
         return chunks
     }
 
-    // Returns combined HTML with data-wt="domIndex" on each element, and the list of domIndices in order
-    fun extractForGoogle(html: String): Pair<String, List<Int>> {
+    // Returns list of (combinedHtml, indices) chunks, each under maxChunkSize chars
+    private fun isFootnote(el: org.jsoup.nodes.Element): Boolean {
+        return el.id().startsWith("cite_note") ||
+               el.parents().any { it.hasClass("references") || it.hasClass("reflist") }
+    }
+
+    fun extractForGoogle(html: String, maxChunkSize: Int = 12000): List<Pair<String, List<Int>>> {
         val doc = Jsoup.parse(html)
-        val allElements = doc.select("h1, p, h2, h3, h4, li, div.hatnote, td, th")
+        val allElements = doc.select("h1, p, h2, h3, h4, li, div.hatnote")
         val nonEmpty = allElements.mapIndexedNotNull { idx, el ->
-            if (el.text().isNotBlank()) Pair(idx, el) else null
+            if (el.text().isNotBlank() && !(el.tagName() == "li" && isFootnote(el))) Pair(idx, el) else null
         }
-        nonEmpty.forEach { (idx, el) -> el.attr("data-wt", idx.toString()) }
-        val combined = nonEmpty.joinToString("") { (_, el) -> el.outerHtml() }
-        return Pair(combined, nonEmpty.map { it.first })
+        nonEmpty.forEach { (idx, el) -> el.attr("wt", idx.toString()) }
+
+        val chunks = mutableListOf<Pair<String, List<Int>>>()
+        val currentHtml = StringBuilder()
+        val currentIndices = mutableListOf<Int>()
+        for ((idx, el) in nonEmpty) {
+            val elHtml = el.outerHtml()
+            if (currentHtml.isNotEmpty() && currentHtml.length + elHtml.length > maxChunkSize) {
+                chunks.add(Pair(currentHtml.toString(), currentIndices.toList()))
+                currentHtml.clear()
+                currentIndices.clear()
+            }
+            currentHtml.append(elHtml)
+            currentIndices.add(idx)
+        }
+        if (currentHtml.isNotEmpty()) {
+            chunks.add(Pair(currentHtml.toString(), currentIndices.toList()))
+        }
+        return chunks
     }
 
     fun parseGoogleResponse(translatedHtml: String): Map<Int, String> {
         val doc = Jsoup.parse(translatedHtml)
         val result = mutableMapOf<Int, String>()
-        doc.select("[data-wt]").forEach { el ->
-            val idx = el.attr("data-wt").toIntOrNull() ?: return@forEach
-            el.removeAttr("data-wt")
+        doc.select("[wt]").forEach { el ->
+            val idx = el.attr("wt").toIntOrNull() ?: return@forEach
+            el.removeAttr("wt")
             result[idx] = el.html()
         }
         return result

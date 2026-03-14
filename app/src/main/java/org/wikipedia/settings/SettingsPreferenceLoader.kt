@@ -27,8 +27,13 @@ import org.wikipedia.readinglist.recommended.RecommendedReadingListSource
 import org.wikipedia.readinglist.sync.ReadingListSyncAdapter
 import org.wikipedia.settings.languages.WikipediaLanguagesActivity
 import org.wikipedia.theme.ThemeFittingRoomActivity
+import org.wikipedia.translation.TranslationCache
 import org.wikipedia.util.FeedbackUtil
 import org.wikipedia.yearinreview.YearInReviewViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : BasePreferenceLoader(fragment) {
     override fun loadPreferences() {
@@ -101,6 +106,18 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
             updateTranslateLanguageSummary()
             it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
                 showTranslateLanguagePicker()
+                true
+            }
+        }
+
+        findPreference(R.string.preference_key_translate_clear_cache).let { pref ->
+            updateTranslateCacheSummary(pref)
+            pref.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                CoroutineScope(Dispatchers.Main).launch {
+                    withContext(Dispatchers.IO) { TranslationCache.clearAll() }
+                    updateTranslateCacheSummary(pref)
+                    FeedbackUtil.showMessage(activity, activity.getString(R.string.preference_summary_translate_clear_cache_empty))
+                }
                 true
             }
         }
@@ -180,6 +197,17 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun updateTranslateCacheSummary(pref: Preference) {
+        CoroutineScope(Dispatchers.Main).launch {
+            val count = withContext(Dispatchers.IO) { TranslationCache.count() }
+            pref.summary = if (count == 0) {
+                activity.getString(R.string.preference_summary_translate_clear_cache_empty)
+            } else {
+                activity.getString(R.string.preference_summary_translate_clear_cache, count)
+            }
+        }
     }
 
     private fun updateTranslateLanguageSummary() {

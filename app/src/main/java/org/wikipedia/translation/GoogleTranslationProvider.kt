@@ -12,7 +12,7 @@ class GoogleTranslationProvider : TranslationProvider {
     override suspend fun translate(html: String, sourceLang: String, targetLang: String, prompt: String): String {
         val postData = "client=gtx&sl=$sourceLang&tl=$targetLang&dt=t&q=${URLEncoder.encode(html, "UTF-8")}"
         val connection = withContext(Dispatchers.IO) {
-            (URL("https://translate.googleapis.com/translate_a/single").openConnection() as HttpURLConnection).apply {
+            (URL("https://senssoft.com/gtranslate").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
                 setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
@@ -36,6 +36,7 @@ class GoogleTranslationProvider : TranslationProvider {
         for (i in 0 until segments.length()) {
             sb.append(segments.getJSONArray(i).optString(0))
         }
-        return sb.toString()
+        val result = sb.toString()
+        return result
     }
 }
