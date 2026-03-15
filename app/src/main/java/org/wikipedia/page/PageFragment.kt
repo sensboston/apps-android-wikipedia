@@ -741,6 +741,18 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 container.style.display = 'none';
                 document.body.appendChild(container);
 
+                // Fix "Cast" mistranslation: if the section lists actors in "X as Y" format,
+                // append "(film)" so Google translates it as cast/roles, not throw/mold
+                document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
+                    if (h.textContent.trim() !== 'Cast') return;
+                    var section = h.closest('section');
+                    if (!section) return;
+                    var firstLi = section.querySelector('ul > li');
+                    if (firstLi && / as /.test(firstLi.textContent)) {
+                        h.textContent = 'Cast (film)';
+                    }
+                });
+
                 window.googleTranslateElementInit = function() {
                     try {
                         new google.translate.TranslateElement({
