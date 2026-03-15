@@ -125,6 +125,35 @@ class SidePanelHandler internal constructor(private val fragment: PageFragment,
     fun showToC() {
         binding.navigationDrawer.openDrawer(binding.sidePanelContainer)
         onStartShow()
+        // Read translated section titles from DOM (element.js translates lazily as user scrolls)
+        bridge.evaluateImmediate("""
+            (function() {
+                var result = {};
+                document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
+                    var anchor = h.id;
+                    if (!anchor) return;
+                    // Only report titles actually translated by element.js
+                    var font = h.querySelector('font');
+                    if (font) result[anchor] = font.textContent.trim();
+                });
+                return JSON.stringify(result);
+            })()
+        """.trimIndent()) { value ->
+            if (!fragment.isAdded || value.isNullOrEmpty() || value == "null") return@evaluateImmediate
+            try {
+                val raw = value.trim('"').replace("\\\"", "\"").replace("\\\\", "\\")
+                val json = org.json.JSONObject(raw)
+                val titles = mutableMapOf<String, String>()
+                json.keys().forEach { key -> titles[key] = json.getString(key) }
+                if (titles.isNotEmpty()) tocAdapter.updateTranslatedTitles(titles, merge = true)
+            } catch (e: Exception) {
+                // ignore parse errors
+            }
+        }
+    }
+
+    fun updateTranslatedTitles(titles: Map<String, String>, merge: Boolean = false) {
+        tocAdapter.updateTranslatedTitles(titles, merge)
     }
 
     fun hide() {
@@ -167,7 +196,15 @@ class SidePanelHandler internal constructor(private val fragment: PageFragment,
     inner class ToCAdapter : BaseAdapter() {
         private val sections = ArrayList<Section>()
         private val sectionYOffsets = SparseIntArray()
+        private val translatedTitles = mutableMapOf<String, String>()
         private var highlightedSection = 0
+
+        fun updateTranslatedTitles(titles: Map<String, String>, merge: Boolean = false) {
+            if (!merge) translatedTitles.clear()
+            translatedTitles.putAll(titles)
+            notifyDataSetChanged()
+        }
+
         fun setPage(page: Page) {
             sections.clear()
             sectionYOffsets.clear()
@@ -212,7 +249,7 @@ class SidePanelHandler internal constructor(private val fragment: PageFragment,
             val section = getItem(position)
             val sectionHeading = newConvertView!!.findViewById<TextView>(R.id.page_toc_item_text)
             val sectionBullet = newConvertView.findViewById<View>(R.id.page_toc_item_bullet)
-            sectionHeading.text = StringUtil.fromHtml(StringUtil.removeStyleTags(section.title))
+            sectionHeading.text = StringUtil.fromHtml(StringUtil.removeStyleTags(translatedTitles[section.anchor] ?: section.title))
             var textSize = TOC_SUBSECTION_TEXT_SIZE
             when {
                 section.isLead -> {

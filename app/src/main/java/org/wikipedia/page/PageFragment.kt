@@ -80,8 +80,10 @@ import org.wikipedia.databinding.GroupFindReferencesInPageBinding
 import org.wikipedia.dataclient.RestService
 import org.wikipedia.dataclient.ServiceFactory
 import org.json.JSONObject
+import org.wikipedia.translation.LibreTranslateProvider
 import org.wikipedia.translation.TranslationManager
 import org.wikipedia.translation.TranslationTextExtractor
+import org.wikipedia.translation.WikiSectionDictionary
 import org.wikipedia.dataclient.WikiSite
 import org.wikipedia.dataclient.donate.CampaignCollection
 import org.wikipedia.dataclient.mwapi.MwQueryPage
@@ -250,6 +252,21 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         webView.addJavascriptInterface(object {
             @android.webkit.JavascriptInterface
             fun onError(msg: String) { android.util.Log.e("ElJs", "ERROR: $msg") }
+
+            @android.webkit.JavascriptInterface
+            fun onTitlesTranslated(json: String) {
+                // MutationObserver сообщает переведённые заголовки из DOM
+                try {
+                    val obj = org.json.JSONObject(json)
+                    val updates = mutableMapOf<String, String>()
+                    obj.keys().forEach { key -> updates[key] = obj.getString(key) }
+                    if (updates.isNotEmpty()) {
+                        activity?.runOnUiThread { sidePanelHandler.updateTranslatedTitles(updates, merge = true) }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("ElJs", "onTitlesTranslated parse error: ${e.message}")
+                }
+            }
         }, "_elJsBridge")
         setupMessageHandlers()
 
@@ -536,6 +553,13 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 sidePanelHandler.setupForNewPage(page)
                 sidePanelHandler.setEnabled(true)
                 model.isReadMoreLoaded = false
+
+                // Apply Contents translation now that sections are available
+                if (autoTranslateOnLoad) {
+                    val targetLang = Prefs.translateLanguageCode
+                    val sourceLang = page.title.wikiSite.languageCode
+                    applyContentsTitleTranslation(page.sections, sourceLang, targetLang)
+                }
             }
         }
         bridge.evaluate(JavaScriptActionHandler.getProtection()) { value ->
@@ -728,29 +752,98 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         }
     }
 
+    private fun applyContentsTitleTranslation(sections: List<Section>, sourceLang: String, targetLang: String) {
+        val nonLead = sections.filter { !it.isLead && it.title.isNotBlank() }
+        val titles = nonLead.map { it.title }
+        android.util.Log.d("ElJs", "applyContentsTitles: ${nonLead.size} sections, lang=$targetLang, titles=${titles.take(5)}")
+
+        // Layer 1: dictionary — instant, zero network
+        val (dictHits, missing) = WikiSectionDictionary.partition(titles, targetLang)
+        android.util.Log.d("ElJs", "dict hits=${dictHits.size} missing=${missing.size}: missing=$missing")
+        android.util.Log.d("ElJs", "sample anchors: ${nonLead.take(5).map { "title='${it.title}' anchor='${it.anchor}'" }}")
+        if (dictHits.isNotEmpty()) {
+            val titleMap = nonLead
+                .filter { dictHits.containsKey(it.title) }
+                .associate { it.anchor to dictHits[it.title]!! }
+            sidePanelHandler.updateTranslatedTitles(titleMap)
+        }
+
+        // Layer 2: LibreTranslate for titles not in dictionary — async fallback
+        if (missing.isNotEmpty()) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val translated = withContext(Dispatchers.IO) {
+                        LibreTranslateProvider.translateBatch(missing, sourceLang, targetLang)
+                    }
+                    val titleMap = nonLead
+                        .filter { translated.containsKey(it.title) }
+                        .associate { it.anchor to translated[it.title]!! }
+                    if (titleMap.isNotEmpty()) sidePanelHandler.updateTranslatedTitles(titleMap, merge = true)
+                } catch (e: Exception) {
+                    android.util.Log.w("ElJs", "LibreTranslate titles fallback failed: ${e.message}")
+                }
+            }
+        }
+    }
+
     private fun startElementJsTranslation(sourceLang: String, targetLang: String) {
         autoTranslateOnLoad = true
+
+        // Get fresh sections at translation time — model.page.sections may be stale
+        // (partial load on large articles). Re-evaluate JS to get current full ToC.
+        bridge.evaluate(JavaScriptActionHandler.getSections()) { value ->
+            if (!isAdded) return@evaluate
+            val freshSections = JsonUtil.decodeFromString<List<Section>>(value) ?: return@evaluate
+            applyContentsTitleTranslation(freshSections, sourceLang, targetLang)
+        }
+
+        // Layer 3: MutationObserver watches element.js translate h2/h3 in DOM — best quality,
+        // replaces dict/LibreTranslate results as user scrolls through the article
         val js = """
             (function() {
                 var style = document.createElement('style');
                 style.textContent = '.goog-te-banner-frame,.skiptranslate{display:none!important;}body{top:0!important;position:static!important;}';
                 document.head.appendChild(style);
 
+                // Fix hyphenation: set target language so browser hyphenation works correctly
+                document.documentElement.lang = '$targetLang';
+                document.querySelectorAll('[lang]').forEach(function(el) {
+                    if (el !== document.documentElement) el.removeAttribute('lang');
+                });
+
                 var container = document.createElement('div');
                 container.id = 'google_translate_element';
                 container.style.display = 'none';
                 document.body.appendChild(container);
 
-                // Fix "Cast" mistranslation: if the section lists actors in "X as Y" format,
-                // append "(film)" so Google translates it as cast/roles, not throw/mold
+                // Fix "Cast" mistranslation
                 document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
                     if (h.textContent.trim() !== 'Cast') return;
                     var section = h.closest('section');
                     if (!section) return;
                     var firstLi = section.querySelector('ul > li');
                     if (firstLi && / as /.test(firstLi.textContent)) {
-                        h.textContent = 'Cast (film)';
+                        h.textContent = 'Film cast';
                     }
+                });
+
+                // MutationObserver: report translated titles to Kotlin as element.js works
+                var observer = new MutationObserver(function(mutations) {
+                    var updates = {};
+                    mutations.forEach(function(m) {
+                        var h = m.target.nodeType === 1
+                            ? m.target.closest('h2.pcs-edit-section-title, h3.pcs-edit-section-title')
+                            : m.target.parentElement && m.target.parentElement.closest('h2.pcs-edit-section-title, h3.pcs-edit-section-title');
+                        if (h && h.id) {
+                            var text = h.textContent.trim();
+                            if (text) updates[h.id] = text;
+                        }
+                    });
+                    if (Object.keys(updates).length > 0)
+                        _elJsBridge.onTitlesTranslated(JSON.stringify(updates));
+                });
+                document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
+                    observer.observe(h, { subtree: true, childList: true, characterData: true });
                 });
 
                 window.googleTranslateElementInit = function() {
