@@ -1,13 +1,18 @@
 package org.wikipedia.search
 
 import android.app.Activity.RESULT_OK
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.location.Location
+import android.os.Build
 import android.os.Bundle
+import android.os.LocaleList
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
@@ -191,6 +196,8 @@ class SearchFragment : Fragment(), SearchResultCallback, RecentSearchesFragment.
             binding.searchLanguageScrollViewContainer.visibility = View.VISIBLE
             binding.searchLanguageScrollView.setUpLanguageScrollTabData(app.languageState.appLanguageCodes, pos, this)
             binding.searchLangButton.visibility = View.GONE
+            val initialLangCode = app.languageState.appLanguageCodes.getOrNull(pos) ?: searchLanguageCode
+            updateImeHintLocale(initialLangCode)
         } else {
             binding.searchLanguageScrollViewContainer.visibility = View.GONE
             binding.searchLangButton.visibility = View.VISIBLE
@@ -383,9 +390,21 @@ class SearchFragment : Fragment(), SearchResultCallback, RecentSearchesFragment.
             langBtnClicked = false
         }
         searchLanguageCode = selectedLanguageCode
-
+        updateImeHintLocale(selectedLanguageCode)
         recentSearchesFragment.reloadRecentSearches()
         startSearch(query, false)
+    }
+
+    private fun updateImeHintLocale(langCode: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val editText = binding.searchCabView.findViewById<EditText>(androidx.appcompat.R.id.search_src_text) ?: return
+            editText.setImeHintLocales(LocaleList(java.util.Locale.forLanguageTag(langCode)))
+            editText.post {
+                editText.requestFocus()
+                val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.restartInput(editText)
+            }
+        }
     }
 
     override fun onLanguageButtonClicked() {

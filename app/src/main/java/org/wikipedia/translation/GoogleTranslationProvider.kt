@@ -18,6 +18,7 @@ class GoogleTranslationProvider : TranslationProvider {
                 setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                 setRequestProperty("Accept", "*/*")
                 setRequestProperty("Connection", "close")
+                setRequestProperty("X-Wiki-Token", "d4dd7c24d31a4b318f4bef48a0162a99")
                 doOutput = true
                 connectTimeout = 15000
                 readTimeout = 30000
