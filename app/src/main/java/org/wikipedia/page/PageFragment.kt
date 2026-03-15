@@ -755,12 +755,8 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     private fun applyContentsTitleTranslation(sections: List<Section>, sourceLang: String, targetLang: String) {
         val nonLead = sections.filter { !it.isLead && it.title.isNotBlank() }
         val titles = nonLead.map { it.title }
-        android.util.Log.d("ElJs", "applyContentsTitles: ${nonLead.size} sections, lang=$targetLang, titles=${titles.take(5)}")
-
         // Layer 1: dictionary — instant, zero network
         val (dictHits, missing) = WikiSectionDictionary.partition(titles, targetLang)
-        android.util.Log.d("ElJs", "dict hits=${dictHits.size} missing=${missing.size}: missing=$missing")
-        android.util.Log.d("ElJs", "sample anchors: ${nonLead.take(5).map { "title='${it.title}' anchor='${it.anchor}'" }}")
         if (dictHits.isNotEmpty()) {
             val titleMap = nonLead
                 .filter { dictHits.containsKey(it.title) }
