@@ -80,6 +80,7 @@ class MainActivity : SingleFragmentActivity<MainFragment>(), MainFragment.Callba
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
+
     }
 
     override fun onResume() {

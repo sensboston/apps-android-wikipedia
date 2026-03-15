@@ -42,6 +42,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.MainScope
@@ -246,6 +247,10 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         val activity = requireActivity()
         webView.setBackgroundColor(ResourceUtil.getThemedColor(activity, R.attr.paper_color))
         bridge = CommunicationBridge(this)
+        webView.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun onError(msg: String) { android.util.Log.e("ElJs", "ERROR: $msg") }
+        }, "_elJsBridge")
         setupMessageHandlers()
 
         binding.pageError.retryClickListener = View.OnClickListener { refreshPage() }
@@ -418,6 +423,36 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
             override val model get() = this@PageFragment.model
 
             override val linkHandler get() = this@PageFragment.linkHandler
+
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                // Let Google Translate requests bypass our OkHttp interceptor
+                if (TranslationManager.isElementJsProvider()) {
+                    val host = request.url.host ?: ""
+                    if (host.contains("translate.google") || host.contains("translate-pa.googleapis") ||
+                        host.contains("gstatic.com") || host.contains("fonts.gstatic")) {
+                        return null
+                    }
+                }
+                val response = super.shouldInterceptRequest(view, request) ?: return null
+                if (!TranslationManager.isElementJsProvider()) return response
+                if (!request.url.toString().contains(RestService.PAGE_HTML_ENDPOINT)) return response
+                val html = response.data?.bufferedReader(Charsets.UTF_8)?.readText() ?: return response
+                val modifiedHtml = html.replace(
+                    Regex("""<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*/?>""", RegexOption.IGNORE_CASE),
+                    ""
+                )
+                val headers = (response.responseHeaders ?: emptyMap()).toMutableMap()
+                headers.remove("Content-Security-Policy")
+                headers.remove("content-security-policy")
+                return WebResourceResponse(
+                    response.mimeType,
+                    response.encoding,
+                    response.statusCode,
+                    response.reasonPhrase ?: "OK",
+                    headers,
+                    modifiedHtml.byteInputStream(Charsets.UTF_8)
+                )
+            }
 
             override fun onPageFinished(view: WebView, url: String) {
                 bridge.evaluateImmediate("(function() { return (typeof pcs !== 'undefined'); })();") { pcsExists ->
@@ -637,87 +672,92 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         val targetLang = Prefs.translateLanguageCode
         if (targetLang.isEmpty()) return
         val sourceLang = sourceTitle.wikiSite.languageCode
-        // Set lang on root and all elements that have explicit lang attributes
-        // so hyphens:auto uses the correct dictionary (PCS may set lang="en" on inner containers)
-        webView.evaluateJavascript(
-            "document.documentElement.lang='$targetLang';" +
-            "document.querySelectorAll('[lang]').forEach(function(e){e.lang='$targetLang';});", null)
-        // Save all link hrefs by position before any innerHTML replacement — will be restored after each chunk
-        webView.evaluateJavascript(
-            "(function(){var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
-            "window._wikiHrefs={};" +
-            "for(var i=0;i<all.length;i++){var links=all[i].querySelectorAll('a[href]');" +
-            "if(links.length){window._wikiHrefs[i]=[];" +
-            "for(var j=0;j<links.length;j++){window._wikiHrefs[i].push({h:links[j].getAttribute('href'),t:links[j].getAttribute('title')});}}}" +
-            "})()", null)
-        val snackbar = FeedbackUtil.makeSnackbar(requireActivity(), getString(R.string.auto_translate_in_progress), Snackbar.LENGTH_INDEFINITE)
-        snackbar.setAction(getString(android.R.string.cancel)) { translationJob?.cancel() }
-        if (Prefs.translateShowProgress) snackbar.show()
-        translationJob?.cancel()
-        translationJob = viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val html = withContext(Dispatchers.IO) {
-                    ServiceFactory.getRest(sourceTitle.wikiSite)
-                        .getPageMobileHtml(sourceTitle.prefixedText)
-                        .string()
-                }
-                if (TranslationManager.isGoogleProvider()) {
-                    val revisionId = TranslationTextExtractor.extractRevisionId(html)
-                    val cached = if (revisionId.isNotEmpty()) {
-                        withContext(Dispatchers.IO) {
-                            TranslationCache.get(sourceTitle.prefixedText, sourceLang, targetLang, revisionId)
-                        }
-                    } else null
-                    val translations = if (cached != null) {
-                        TranslationTextExtractor.parseGoogleResponse(cached)
-                    } else {
-                        val chunks = TranslationTextExtractor.extractForGoogle(html)
-                        val resultHtml = arrayOfNulls<String>(chunks.size)
-                        val allTranslations = mutableMapOf<Int, String>()
-                        val doneCount = AtomicInteger(0)
-                        val semaphore = Semaphore(5)
-                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, 0, chunks.size))
-                        coroutineScope {
-                            chunks.mapIndexed { index, (chunkHtml, _) ->
-                                async {
-                                    semaphore.withPermit {
-                                        val translatedChunk = withContext(Dispatchers.IO) {
-                                            TranslationManager.getProvider().translate(chunkHtml, sourceLang, targetLang, "")
-                                        }
-                                        val parsed = TranslationTextExtractor.parseGoogleResponse(translatedChunk)
-                                        resultHtml[index] = translatedChunk
-                                        allTranslations.putAll(parsed)
-                                        injectTranslationsGoogle(parsed)
-                                        snackbar.setText(getString(R.string.auto_translate_in_progress_n, doneCount.incrementAndGet(), chunks.size))
-                                    }
-                                }
-                            }.awaitAll()
-                        }
-                        if (revisionId.isNotEmpty()) {
-                            val combined = resultHtml.filterNotNull().joinToString("")
-                            withContext(Dispatchers.IO) {
-                                TranslationCache.save(sourceTitle.prefixedText, sourceLang, targetLang, revisionId, combined)
-                            }
-                        }
-                        allTranslations
+
+        if (TranslationManager.isElementJsProvider()) {
+            startElementJsTranslation(sourceLang, targetLang)
+            return
+        }
+
+        if (TranslationManager.isGoogleProvider()) {
+            // Set lang attrs so hyphens:auto uses correct dictionary
+            webView.evaluateJavascript(
+                "document.documentElement.lang='$targetLang';" +
+                "document.querySelectorAll('[lang]').forEach(function(e){e.lang='$targetLang';});", null)
+            // Save link hrefs before innerHTML replacement
+            webView.evaluateJavascript(
+                "(function(){var all=document.querySelectorAll('h1,p,h2,h3,h4,li,div.hatnote');" +
+                "window._wikiHrefs={};" +
+                "for(var i=0;i<all.length;i++){var links=all[i].querySelectorAll('a[href]');" +
+                "if(links.length){window._wikiHrefs[i]=[];" +
+                "for(var j=0;j<links.length;j++){window._wikiHrefs[i].push({h:links[j].getAttribute('href'),t:links[j].getAttribute('title')});}}}" +
+                "})()", null)
+            translationJob?.cancel()
+            translationJob = viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val html = withContext(Dispatchers.IO) {
+                        ServiceFactory.getRest(sourceTitle.wikiSite)
+                            .getPageMobileHtml(sourceTitle.prefixedText)
+                            .string()
                     }
-                    injectTranslationsGoogle(translations)
+                    val chunks = TranslationTextExtractor.extractForGoogle(html)
+                    val allTranslations = mutableMapOf<Int, String>()
+                    val semaphore = Semaphore(3)
+                    coroutineScope {
+                        chunks.map { (chunkHtml, _) ->
+                            async {
+                                semaphore.withPermit {
+                                    val translatedChunk = withContext(Dispatchers.IO) {
+                                        TranslationManager.getProvider().translate(chunkHtml, sourceLang, targetLang, "")
+                                    }
+                                    val parsed = TranslationTextExtractor.parseGoogleResponse(translatedChunk)
+                                    allTranslations.putAll(parsed)
+                                    injectTranslationsGoogle(parsed)
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                    injectTranslationsGoogle(allTranslations)
                     bridge.execute(JavaScriptActionHandler.setHorizontalMargins(Prefs.marginSizeMultiplier))
                     autoTranslateOnLoad = true
-                    return@launch
+                } catch (e: Exception) {
+                    if (e !is CancellationException) {
+                        android.util.Log.e("AutoTranslate", "Translation error", e)
+                    }
                 }
-            } catch (e: Exception) {
-                if (e !is CancellationException) {
-                    val msg = e.message ?: e.toString()
-                    android.util.Log.e("AutoTranslate", "Translation error: $msg", e)
-                    FeedbackUtil.makeSnackbar(requireActivity(), msg, Snackbar.LENGTH_INDEFINITE)
-                        .setAction(android.R.string.ok) { }
-                        .show()
-                }
-            } finally {
-                snackbar.dismiss()
             }
         }
+    }
+
+    private fun startElementJsTranslation(sourceLang: String, targetLang: String) {
+        autoTranslateOnLoad = true
+        val js = """
+            (function() {
+                var style = document.createElement('style');
+                style.textContent = '.goog-te-banner-frame,.skiptranslate{display:none!important;}body{top:0!important;position:static!important;}';
+                document.head.appendChild(style);
+
+                var container = document.createElement('div');
+                container.id = 'google_translate_element';
+                container.style.display = 'none';
+                document.body.appendChild(container);
+
+                window.googleTranslateElementInit = function() {
+                    try {
+                        new google.translate.TranslateElement({
+                            pageLanguage: '$sourceLang',
+                            includedLanguages: '$targetLang',
+                            autoDisplay: false
+                        }, 'google_translate_element');
+                    } catch(e) { _elJsBridge.onError('Init: ' + e.toString()); }
+                };
+
+                var script = document.createElement('script');
+                script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+                script.onerror = function() { _elJsBridge.onError('Script load failed'); };
+                document.head.appendChild(script);
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
     }
 
     private fun injectTranslations(translations: Map<Int, String>) {

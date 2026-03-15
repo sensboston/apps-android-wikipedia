@@ -110,24 +110,6 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
             }
         }
 
-        findPreference(R.string.preference_key_translate_clear_cache).let { pref ->
-            updateTranslateCacheSummary(pref)
-            pref.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                MaterialAlertDialogBuilder(activity)
-                    .setTitle(R.string.translate_clear_cache_confirm_title)
-                    .setMessage(R.string.translate_clear_cache_confirm_message)
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        CoroutineScope(Dispatchers.Main).launch {
-                            withContext(Dispatchers.IO) { TranslationCache.clearAll() }
-                            updateTranslateCacheSummary(pref)
-                            FeedbackUtil.showMessage(activity, activity.getString(R.string.preference_summary_translate_clear_cache_empty))
-                        }
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-                true
-            }
-        }
 
         findPreference(R.string.preference_key_about_wikipedia_app).onPreferenceClickListener = Preference.OnPreferenceClickListener {
             activity.startActivity(Intent(activity, AboutActivity::class.java))
@@ -206,16 +188,6 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
             .show()
     }
 
-    private fun updateTranslateCacheSummary(pref: Preference) {
-        CoroutineScope(Dispatchers.Main).launch {
-            val count = withContext(Dispatchers.IO) { TranslationCache.count() }
-            pref.summary = if (count == 0) {
-                activity.getString(R.string.preference_summary_translate_clear_cache_empty)
-            } else {
-                activity.getString(R.string.preference_summary_translate_clear_cache, count)
-            }
-        }
-    }
 
     private fun updateTranslateLanguageSummary() {
         val code = Prefs.translateLanguageCode

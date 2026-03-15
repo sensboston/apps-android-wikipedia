@@ -4,5 +4,6 @@ object TranslationManager {
 
     fun getProvider(): TranslationProvider = GoogleTranslationProvider()
 
-    fun isGoogleProvider() = true
+    fun isGoogleProvider() = false
+    fun isElementJsProvider() = true
 }

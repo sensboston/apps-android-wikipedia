@@ -45,19 +45,31 @@ object TranslationTextExtractor {
         val chunks = mutableListOf<Pair<String, List<Int>>>()
         val currentHtml = StringBuilder()
         val currentIndices = mutableListOf<Int>()
-        for ((idx, el) in nonEmpty) {
-            val elHtml = el.outerHtml()
-            if (currentHtml.isNotEmpty() && currentHtml.length + elHtml.length > maxChunkSize) {
+
+        fun flushChunk() {
+            if (currentHtml.isNotEmpty()) {
                 chunks.add(Pair(currentHtml.toString(), currentIndices.toList()))
                 currentHtml.clear()
                 currentIndices.clear()
             }
-            currentHtml.append(elHtml)
-            currentIndices.add(idx)
         }
-        if (currentHtml.isNotEmpty()) {
-            chunks.add(Pair(currentHtml.toString(), currentIndices.toList()))
+
+        for ((idx, el) in nonEmpty) {
+            val isHeading = el.tagName() in listOf("h1", "h2", "h3", "h4")
+            val elHtml = el.outerHtml()
+            // Headings go into their own chunk so Google doesn't skip them in mixed context
+            if (isHeading) {
+                flushChunk()
+                chunks.add(Pair(elHtml, listOf(idx)))
+            } else {
+                if (currentHtml.isNotEmpty() && currentHtml.length + elHtml.length > maxChunkSize) {
+                    flushChunk()
+                }
+                currentHtml.append(elHtml)
+                currentIndices.add(idx)
+            }
         }
+        flushChunk()
         return chunks
     }
 

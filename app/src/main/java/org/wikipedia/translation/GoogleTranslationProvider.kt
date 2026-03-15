@@ -12,13 +12,12 @@ class GoogleTranslationProvider : TranslationProvider {
     override suspend fun translate(html: String, sourceLang: String, targetLang: String, prompt: String): String {
         val postData = "client=gtx&sl=$sourceLang&tl=$targetLang&dt=t&q=${URLEncoder.encode(html, "UTF-8")}"
         val connection = withContext(Dispatchers.IO) {
-            (URL("https://senssoft.com/gtranslate").openConnection() as HttpURLConnection).apply {
+            (URL("https://translate.googleapis.com/translate_a/single").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
                 setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                 setRequestProperty("Accept", "*/*")
                 setRequestProperty("Connection", "close")
-                setRequestProperty("X-Wiki-Token", "d4dd7c24d31a4b318f4bef48a0162a99")
                 doOutput = true
                 connectTimeout = 15000
                 readTimeout = 30000
@@ -27,8 +26,8 @@ class GoogleTranslationProvider : TranslationProvider {
         }
         val code = withContext(Dispatchers.IO) { connection.responseCode }
         if (code !in 200..299) {
-            val error = withContext(Dispatchers.IO) { connection.errorStream?.bufferedReader()?.readText() ?: "HTTP $code" }
-            throw Exception("Google Translate HTTP $code: $error")
+            withContext(Dispatchers.IO) { connection.errorStream?.close() }
+            throw Exception("Translation failed: HTTP $code")
         }
         val response = withContext(Dispatchers.IO) { connection.inputStream.bufferedReader().readText() }
         // Response format: [[["translated_segment", "original", ...], ...], null, "en", ...]
