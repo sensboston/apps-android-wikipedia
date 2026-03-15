@@ -797,15 +797,10 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         // replaces dict/LibreTranslate results as user scrolls through the article
         val js = """
             (function() {
+                console.log('ElJs: startElementJsTranslation called, src=$sourceLang tgt=$targetLang');
                 var style = document.createElement('style');
                 style.textContent = '.goog-te-banner-frame,.skiptranslate{display:none!important;}body{top:0!important;position:static!important;}';
                 document.head.appendChild(style);
-
-                // Fix hyphenation: set target language so browser hyphenation works correctly
-                document.documentElement.lang = '$targetLang';
-                document.querySelectorAll('[lang]').forEach(function(el) {
-                    if (el !== document.documentElement) el.removeAttribute('lang');
-                });
 
                 var container = document.createElement('div');
                 container.id = 'google_translate_element';
@@ -849,6 +844,11 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                             includedLanguages: '$targetLang',
                             autoDisplay: false
                         }, 'google_translate_element');
+                        // Fix hyphenation: set after element.js init so it doesn't confuse language detection
+                        document.documentElement.lang = '$targetLang';
+                        document.querySelectorAll('[lang]').forEach(function(el) {
+                            if (el !== document.documentElement) el.removeAttribute('lang');
+                        });
                     } catch(e) { _elJsBridge.onError('Init: ' + e.toString()); }
                 };
 
@@ -858,6 +858,11 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 document.head.appendChild(script);
             })();
         """.trimIndent()
+        val pageUrl = webView.url ?: ""
+        val host = android.net.Uri.parse(pageUrl).host ?: "en.wikipedia.org"
+        val cookieValue = "googtrans=/$sourceLang/$targetLang"
+        android.webkit.CookieManager.getInstance().setCookie("https://$host", cookieValue)
+        android.webkit.CookieManager.getInstance().setCookie("https://.$host", cookieValue)
         webView.evaluateJavascript(js, null)
     }
 
