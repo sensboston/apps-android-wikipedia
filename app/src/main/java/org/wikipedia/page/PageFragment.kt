@@ -871,7 +871,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         android.webkit.CookieManager.getInstance().removeAllCookies {
             android.webkit.CookieManager.getInstance().setCookie("https://$host", "googtrans=/$sourceLang/$targetLang")
             android.webkit.CookieManager.getInstance().flush()
-            webView.post { webView.evaluateJavascript(js, null) }
+            webView.evaluateJavascript(js, null)
         }
     }
 
