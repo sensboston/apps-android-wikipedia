@@ -850,6 +850,11 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                             includedLanguages: '$targetLang',
                             autoDisplay: false
                         }, 'google_translate_element');
+                        // Set lang AFTER element.js reads it (so it doesn't skip translation thinking page is already translated).
+                        // Required for CSS hyphens:auto to use the correct dictionary.
+                        // PCS sets lang="en" on inner containers — reset all of them.
+                        document.documentElement.lang = '$targetLang';
+                        document.querySelectorAll('[lang]').forEach(function(el) { el.lang = '$targetLang'; });
                     } catch(e) { _elJsBridge.onError('Init: ' + e.toString()); }
                 };
 
