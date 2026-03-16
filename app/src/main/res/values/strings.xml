@@ -394,6 +394,8 @@
     <string name="auto_translate_section_title">Auto translate</string>
     <string name="auto_translate_lang_item">%s (Auto)</string>
     <string name="auto_translate_source_lang_subtitle">Original article</string>
+    <string name="auto_translate_none">None</string>
+    <string name="auto_translate_none_subtitle">Disable auto-translate</string>
     <string name="auto_translate_lang_item_subtitle">Auto-translate</string>
     <string name="auto_translate_in_progress">Translating article…</string>
     <string name="auto_translate_in_progress_n">Translating… %1$d/%2$d</string>

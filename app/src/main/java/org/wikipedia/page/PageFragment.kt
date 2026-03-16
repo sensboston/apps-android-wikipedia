@@ -251,7 +251,15 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         bridge = CommunicationBridge(this)
         webView.addJavascriptInterface(object {
             @android.webkit.JavascriptInterface
-            fun onError(msg: String) { android.util.Log.e("ElJs", "ERROR: $msg") }
+            fun onError(msg: String) {
+                android.util.Log.e("ElJs", "ERROR: $msg")
+                activity?.runOnUiThread { updateProgressBar(false) }
+            }
+
+            @android.webkit.JavascriptInterface
+            fun onLoaded() {
+                activity?.runOnUiThread { updateProgressBar(false) }
+            }
 
             @android.webkit.JavascriptInterface
             fun onTitlesTranslated(json: String) {
@@ -678,6 +686,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     }
 
     fun clearAutoTranslate() {
+        lastCookieLang = ""
         translationJob?.cancel()
         if (autoTranslateOnLoad) {
             autoTranslateOnLoad = false
@@ -784,6 +793,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
 
     private fun startElementJsTranslation(sourceLang: String, targetLang: String) {
         autoTranslateOnLoad = true
+        updateProgressBar(true)
 
         // Get fresh sections at translation time — model.page.sections may be stale
         // (partial load on large articles). Re-evaluate JS to get current full ToC.
@@ -860,18 +870,33 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
 
                 var script = document.createElement('script');
                 script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+                script.onload = function() { _elJsBridge.onLoaded(); };
                 script.onerror = function() { _elJsBridge.onError('element.js load failed'); };
                 document.head.appendChild(script);
             })();
         """.trimIndent()
         val pageUrl = webView.url ?: ""
         val host = android.net.Uri.parse(pageUrl).host ?: "en.wikipedia.org"
-        // Remove ALL cookies so stale googtrans=/en/ru doesn't take priority,
-        // then set only the correct googtrans. Article is already rendered so this is safe.
-        android.webkit.CookieManager.getInstance().removeAllCookies {
-            android.webkit.CookieManager.getInstance().setCookie("https://$host", "googtrans=/$sourceLang/$targetLang")
-            android.webkit.CookieManager.getInstance().flush()
+        val cookieKey = "$sourceLang/$targetLang@$host"
+        val cm = android.webkit.CookieManager.getInstance()
+
+        fun applyAndRun() {
+            if (lastCookieLang != cookieKey) {
+                lastCookieLang = cookieKey
+                cm.setCookie("https://$host", "googtrans=/$sourceLang/$targetLang")
+                cm.flush()
+            }
             webView.evaluateJavascript(js, null)
+        }
+
+        if (!Prefs.googtransCookiesCleared) {
+            // One-time migration: clear any accumulated stale cookies, then never do it again
+            cm.removeAllCookies {
+                Prefs.googtransCookiesCleared = true
+                applyAndRun()
+            }
+        } else {
+            applyAndRun()
         }
     }
 
@@ -1812,5 +1837,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
     companion object {
         private const val ARG_THEME_CHANGE_SCROLLED = "themeChangeScrolled"
         private val REFRESH_SPINNER_ADDITIONAL_OFFSET = (16 * DimenUtil.densityScalar).toInt()
+        // Cache last cookie language to avoid redundant cookie operations
+        private var lastCookieLang: String = ""
     }
 }

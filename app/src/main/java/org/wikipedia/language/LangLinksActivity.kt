@@ -42,6 +42,12 @@ class LangLinksActivity : BaseActivity() {
                             finish()
                             return@ComposeLangLinksScreen
                         }
+                        if (item.isDisableAutoTranslate) {
+                            setResult(ACTIVITY_RESULT_CLEAR_TRANSLATE)
+                            DeviceUtil.hideSoftKeyboard(this)
+                            finish()
+                            return@ComposeLangLinksScreen
+                        }
                         val pageTitle = item.pageTitle ?: return@ComposeLangLinksScreen
                         WikipediaApp.instance.languageState
                             .addMruLanguageCode(item.languageCode)
@@ -75,6 +81,7 @@ class LangLinksActivity : BaseActivity() {
     companion object {
         const val ACTIVITY_RESULT_LANGLINK_SELECT = 1
         const val ACTIVITY_RESULT_AUTO_TRANSLATE = 2
+        const val ACTIVITY_RESULT_CLEAR_TRANSLATE = 3
         fun newIntent(context: Context, title: PageTitle, historyEntryId: Long = -1): Intent {
             return Intent(context, LangLinksActivity::class.java)
                 .putExtra(Constants.ARG_TITLE, title)

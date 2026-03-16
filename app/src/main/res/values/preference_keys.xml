@@ -212,6 +212,7 @@
     <string name="preference_key_yir_reading_list_visit_count">yirReadingListVisitCount</string>
     <string name="preference_key_yir_reading_list_survey_shown">yirReadingListSurveyShown</string>
     <string name="preference_key_translate_language">translateLanguage</string>
+    <string name="preference_key_googtrans_cookies_cleared">googtransCookiesCleared</string>
     <string name="preference_key_translate_clear_cache">translateClearCache</string>
     <string name="preference_key_translate_show_progress">translateShowProgress</string>
     <string name="preference_category_auto_translate">autoTranslate</string>

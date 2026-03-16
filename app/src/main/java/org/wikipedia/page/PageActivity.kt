@@ -149,6 +149,10 @@ class PageActivity : BaseActivity(), PageFragment.Callback, LinkPreviewDialog.Lo
                     title?.let { pageFragment.startAutoTranslation(it) }
                 }
             }
+            LangLinksActivity.ACTIVITY_RESULT_CLEAR_TRANSLATE -> {
+                Prefs.translateLanguageCode = ""
+                pageFragment.clearAutoTranslate()
+            }
         }
     }
 
