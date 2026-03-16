@@ -174,14 +174,16 @@ internal class SettingsPreferenceLoader(fragment: PreferenceFragmentCompat) : Ba
     private fun showTranslateLanguagePicker() {
         val app = WikipediaApp.instance
         val codes = app.languageState.appMruLanguageCodes
-        val names = codes.map { code ->
+        val langNames = codes.map { code ->
             val localized = app.languageState.getAppLanguageLocalizedName(code) ?: code
             "$localized ($code)"
-        }.toTypedArray()
+        }
+        val noneLabel = activity.getString(R.string.auto_translate_none)
+        val names = (listOf(noneLabel) + langNames).toTypedArray()
         MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.preference_title_translate_language)
             .setItems(names) { _: DialogInterface, which: Int ->
-                Prefs.translateLanguageCode = codes[which]
+                Prefs.translateLanguageCode = if (which == 0) "" else codes[which - 1]
                 updateTranslateLanguageSummary()
             }
             .setNegativeButton(android.R.string.cancel, null)

@@ -151,12 +151,6 @@ class LangLinksViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
             // not searching
             buildAutoTranslateItem()?.let {
                 items.add(it)
-                // "None" option to disable auto-translate
-                items.add(LangLinksItem(
-                    localizedName = app.getString(R.string.auto_translate_none),
-                    canonicalName = app.getString(R.string.auto_translate_none_subtitle),
-                    isDisableAutoTranslate = true
-                ))
                 // Keep original source language as second entry so user can navigate back
                 val srcCode = pageTitle.wikiSite.languageCode
                 val srcName = StringUtil.capitalize(app.languageState.getAppLanguageLocalizedName(srcCode)) ?: srcCode
