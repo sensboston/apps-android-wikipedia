@@ -797,7 +797,13 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
         // replaces dict/LibreTranslate results as user scrolls through the article
         val js = """
             (function() {
-                console.log('ElJs: startElementJsTranslation called, src=$sourceLang tgt=$targetLang');
+                // Use meta tag to declare translation direction (cookie set in Kotlin before this runs)
+                var existingMeta = document.querySelector('meta[name="googtrans"]');
+                if (existingMeta) existingMeta.parentNode.removeChild(existingMeta);
+                var meta = document.createElement('meta');
+                meta.name = 'googtrans';
+                meta.content = '/$sourceLang/$targetLang';
+                document.head.appendChild(meta);
                 var style = document.createElement('style');
                 style.textContent = '.goog-te-banner-frame,.skiptranslate{display:none!important;}body{top:0!important;position:static!important;}';
                 document.head.appendChild(style);
@@ -849,16 +855,19 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
 
                 var script = document.createElement('script');
                 script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-                script.onerror = function() { _elJsBridge.onError('Script load failed'); };
+                script.onerror = function() { _elJsBridge.onError('element.js load failed'); };
                 document.head.appendChild(script);
             })();
         """.trimIndent()
         val pageUrl = webView.url ?: ""
         val host = android.net.Uri.parse(pageUrl).host ?: "en.wikipedia.org"
-        val cookieValue = "googtrans=/$sourceLang/$targetLang"
-        android.webkit.CookieManager.getInstance().setCookie("https://$host", cookieValue)
-        android.webkit.CookieManager.getInstance().setCookie("https://.$host", cookieValue)
-        webView.evaluateJavascript(js, null)
+        // Remove ALL cookies so stale googtrans=/en/ru doesn't take priority,
+        // then set only the correct googtrans. Article is already rendered so this is safe.
+        android.webkit.CookieManager.getInstance().removeAllCookies {
+            android.webkit.CookieManager.getInstance().setCookie("https://$host", "googtrans=/$sourceLang/$targetLang")
+            android.webkit.CookieManager.getInstance().flush()
+            webView.post { webView.evaluateJavascript(js, null) }
+        }
     }
 
     private fun injectTranslations(translations: Map<Int, String>) {

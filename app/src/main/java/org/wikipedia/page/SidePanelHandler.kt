@@ -208,6 +208,7 @@ class SidePanelHandler internal constructor(private val fragment: PageFragment,
         fun setPage(page: Page) {
             sections.clear()
             sectionYOffsets.clear()
+            translatedTitles.clear()
             sections.addAll(page.sections.filter { it.level < MAX_LEVELS })
             // add a fake section at the end to represent the "about this article" contents at the bottom:
             val heading = fragment.requireContext().getString(page.title, R.string.about_article_section)

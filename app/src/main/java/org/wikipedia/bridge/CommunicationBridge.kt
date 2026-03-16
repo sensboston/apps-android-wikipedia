@@ -150,7 +150,7 @@ class CommunicationBridge constructor(private val communicationBridgeListener: C
 
     private class CommunicatingChrome : WebChromeClient() {
         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-            L.d(consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + " - " + consoleMessage.message())
+            android.util.Log.d("ElJsConsole", "[${consoleMessage.messageLevel()}] ${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})")
             return true
         }
     }

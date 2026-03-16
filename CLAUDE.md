@@ -1,5 +1,18 @@
 @AGENTS.md
 
+## ⚠️ BUILD RULE — READ FIRST
+
+**App name MUST always be "Wikipedia" (package: org.wikipedia).**
+NEVER use `alpha`, `beta` flavors for builds intended for users:
+- `alpha` → "Wikipedia Alpha" (org.wikipedia.alpha) — SEPARATE app, does NOT update existing installs
+- `beta` → "Wikipedia Beta" (org.wikipedia.beta) — SEPARATE app
+
+**For local development/testing:** `assembleDevDebug` → `org.wikipedia.dev`
+**For demoscene/user deployment:** `assembleProdRelease` → `org.wikipedia` ("Wikipedia")
+Both will update over existing Wikipedia installs without creating a duplicate app.
+
+---
+
 ## Auto-translate Feature (branch: feature/llm-translate)
 
 ### Overview
@@ -95,3 +108,16 @@ adb shell am start -n org.wikipedia.dev/org.wikipedia.main.MainActivity
 ```
 Check `adb logcat -d -s Wikipedia:V *:E` for errors.
 After reinstall: verify `Prefs.translateLanguageCode` not reset (adb `run-as` + grep shared_prefs).
+
+**Demoscene deployment** (mydemoscene.com/demos/wiki/wiki.apk):
+- ALWAYS use `assembleProdRelease` — package `org.wikipedia`, app name "Wikipedia"
+- Requires `~/.sign/signing.properties` with debug keystore (created 2026-03-15):
+  ```
+  keystore=C:/Users/Ichiro/.android/debug.keystore
+  store.pass=android
+  key.alias=androiddebugkey
+  key.pass=android
+  ```
+- NEVER use alpha/beta/dev flavor for demoscene — alpha is `org.wikipedia.alpha` ("Wikipedia Alpha"),
+  installs as a SEPARATE app and does NOT update users' existing Wikipedia installation
+- Deploy: `scp app/build/outputs/apk/prod/release/app-prod-release.apk ubuntu@129.80.19.104:/var/www/html/demos/wiki/wiki.apk`
