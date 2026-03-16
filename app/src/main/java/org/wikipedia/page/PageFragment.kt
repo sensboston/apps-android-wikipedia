@@ -844,11 +844,6 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                             includedLanguages: '$targetLang',
                             autoDisplay: false
                         }, 'google_translate_element');
-                        // Fix hyphenation: set after element.js init so it doesn't confuse language detection
-                        document.documentElement.lang = '$targetLang';
-                        document.querySelectorAll('[lang]').forEach(function(el) {
-                            if (el !== document.documentElement) el.removeAttribute('lang');
-                        });
                     } catch(e) { _elJsBridge.onError('Init: ' + e.toString()); }
                 };
 
