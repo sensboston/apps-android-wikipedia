@@ -824,16 +824,15 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 document.body.appendChild(container);
 
                 // Fix "Cast" mistranslation (Google Translate renders it as a verb)
-                // Use text node directly — h.textContent may include span children (edit button)
+                // PCS may wrap heading text in a span — search both direct text nodes and child spans
                 document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
-                    var textNode = Array.from(h.childNodes).find(function(n) { return n.nodeType === 3 && n.textContent.trim() === 'Cast'; });
-                    if (!textNode) return;
-                    var section = h.closest('section');
-                    if (!section) return;
-                    var firstLi = section.querySelector('ul > li');
-                    if (firstLi && / as /.test(firstLi.textContent)) {
-                        textNode.textContent = 'Film cast';
+                    if (h.textContent.trim().indexOf('Cast') !== 0) return;
+                    var target = Array.from(h.childNodes).find(function(n) { return n.nodeType === 3 && n.textContent.trim() === 'Cast'; });
+                    if (!target) {
+                        var sp = Array.from(h.querySelectorAll('span')).find(function(s) { return s.textContent.trim() === 'Cast'; });
+                        if (sp) target = sp;
                     }
+                    if (target) target.textContent = 'Film cast';
                 });
 
                 // MutationObserver: report translated titles to Kotlin as element.js works
