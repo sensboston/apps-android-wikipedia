@@ -102,7 +102,7 @@ class AboutActivity : BaseActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                         .safeDrawingPadding(),
-                    versionName = BuildConfig.VERSION_NAME,
+                    versionName = BuildConfig.VERSION_NAME + " (auto-translate)",
                     credits = credits,
                     onBackButtonClick = {
                         onBackPressedDispatcher.onBackPressed()
