@@ -8,6 +8,7 @@ import android.net.NetworkRequest
 import android.os.Build
 import org.wikipedia.WikipediaApp
 import org.wikipedia.analytics.eventplatform.EventPlatformClient
+import org.wikipedia.dataclient.okhttp.OkHttpConnectionFactory
 import org.wikipedia.savedpages.SavedPageSyncService
 import java.util.concurrent.TimeUnit
 
@@ -48,6 +49,7 @@ class ConnectionStateMonitor : ConnectivityManager.NetworkCallback() {
 
     override fun onAvailable(network: Network) {
         super.onAvailable(network)
+        OkHttpConnectionFactory.client.connectionPool.evictAll()
         updateOnlineState(true)
     }
 
