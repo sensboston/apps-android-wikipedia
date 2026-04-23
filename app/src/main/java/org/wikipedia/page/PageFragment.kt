@@ -823,14 +823,16 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 container.style.display = 'none';
                 document.body.appendChild(container);
 
-                // Fix "Cast" mistranslation
+                // Fix "Cast" mistranslation (Google Translate renders it as a verb)
+                // Use text node directly — h.textContent may include span children (edit button)
                 document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
-                    if (h.textContent.trim() !== 'Cast') return;
+                    var textNode = Array.from(h.childNodes).find(function(n) { return n.nodeType === 3 && n.textContent.trim() === 'Cast'; });
+                    if (!textNode) return;
                     var section = h.closest('section');
                     if (!section) return;
                     var firstLi = section.querySelector('ul > li');
                     if (firstLi && / as /.test(firstLi.textContent)) {
-                        h.textContent = 'Film cast';
+                        textNode.textContent = 'Film cast';
                     }
                 });
 
