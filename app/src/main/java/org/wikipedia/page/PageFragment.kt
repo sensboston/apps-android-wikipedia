@@ -823,12 +823,23 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 container.style.display = 'none';
                 document.body.appendChild(container);
 
+                var castLabels = {
+                    'ru': 'В ролях:', 'uk': 'У ролях:', 'be': 'У ролях:',
+                    'de': 'Besetzung:', 'fr': 'Distribution:', 'es': 'Reparto:',
+                    'it': 'Cast:', 'pt': 'Elenco:', 'nl': 'Rolverdeling:',
+                    'pl': 'Obsada:', 'cs': 'Obsazení:', 'sk': 'Obsadenie:',
+                    'ja': 'キャスト:', 'zh': '演员表:', 'ko': '출연진:',
+                    'ar': 'طاقم التمثيل:', 'tr': 'Oyuncular:', 'sv': 'Rollbesättning:'
+                };
+                var castLabel = castLabels['$targetLang'] || 'Film cast';
+
                 function fixCastHeading(h) {
                     var walker = document.createTreeWalker(h, NodeFilter.SHOW_TEXT, null, false);
                     var node;
                     while ((node = walker.nextNode())) {
                         if (node.textContent.trim() === 'Cast') {
-                            node.textContent = node.textContent.replace('Cast', 'Film cast');
+                            node.textContent = node.textContent.replace('Cast', castLabel);
+                            h.setAttribute('translate', 'no');
                             break;
                         }
                     }
