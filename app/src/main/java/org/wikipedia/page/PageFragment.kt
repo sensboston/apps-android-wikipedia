@@ -823,9 +823,7 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 container.style.display = 'none';
                 document.body.appendChild(container);
 
-                // Fix "Cast" mistranslation (Google Translate renders it as a verb)
-                // Walk ALL h2/h3 text nodes — skip h.textContent check, it includes edit-button spans
-                document.querySelectorAll('h2, h3').forEach(function(h) {
+                function fixCastHeading(h) {
                     var walker = document.createTreeWalker(h, NodeFilter.SHOW_TEXT, null, false);
                     var node;
                     while ((node = walker.nextNode())) {
@@ -834,7 +832,10 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                             break;
                         }
                     }
-                });
+                }
+
+                // Fix already-present headings
+                document.querySelectorAll('h2, h3').forEach(fixCastHeading);
 
                 // MutationObserver: report translated titles to Kotlin as element.js works
                 var observer = new MutationObserver(function(mutations) {
@@ -854,6 +855,25 @@ class PageFragment : Fragment(), BackPressedHandler, CommunicationBridge.Communi
                 document.querySelectorAll('h2.pcs-edit-section-title, h3.pcs-edit-section-title').forEach(function(h) {
                     observer.observe(h, { subtree: true, childList: true, characterData: true });
                 });
+
+                // Watch for lazy-loaded sections: fix Cast before element.js translates them
+                // Registered before element.js script loads — fires first when new nodes appear
+                var castWatcher = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(m) {
+                        m.addedNodes.forEach(function(added) {
+                            if (added.nodeType !== 1) return;
+                            var headings = [];
+                            if (added.tagName === 'H2' || added.tagName === 'H3') headings.push(added);
+                            added.querySelectorAll('h2, h3').forEach(function(h) { headings.push(h); });
+                            headings.forEach(function(h) {
+                                fixCastHeading(h);
+                                if (h.classList.contains('pcs-edit-section-title'))
+                                    observer.observe(h, { subtree: true, childList: true, characterData: true });
+                            });
+                        });
+                    });
+                });
+                castWatcher.observe(document.body, { childList: true, subtree: true });
 
                 window.googleTranslateElementInit = function() {
                     try {
